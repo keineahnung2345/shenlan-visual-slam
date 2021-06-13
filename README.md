@@ -10,3 +10,8 @@ Myslam, myvideo code: [keineahnung2345/ORB_SLAM2](https://github.com/keineahnung
 Proof of Rodrigues' rotation formula.
 
 ![n_v_rotate](HW2/n_v_rotate.png)
+
+## HW3
+Groundtruth and esitmated trajectories.
+
+![trajectory_errors](HW3/trajectory_errors.png)
