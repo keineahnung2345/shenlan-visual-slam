@@ -268,8 +268,57 @@ $\bold{x} = [x_0, x_1, x_2, x_3]^T$
 $\bold{z} = [v_1, v_2, v_3, y_1, y_2, y_3]^T$
 
 1. 可以定义矩阵$\bold{H}$，使得批量误差为$\bold{e} = \bold{z} − \bold{H}\bold{x}$。请给出此处$\bold{H}$的具体形式。
+
+   答：
+
+   观测$\bold{z} = [v_1, v_2, v_3, y_1, y_2, y_3]^T$，其中$v_k = x_k - x_{k-1} - w_k$，$y_k = x_k + n_k$。
+
+   对输入的估计为$x_k - x_{k-1}$，对路标的估计为$x_k$。
+
+   所有时间的估计可以写成一个向量$[x_1-x_0, x_2-x_1, x_3-x_2, x_1, x_2, x_3]^T \triangleq \bold{H}\bold{x}$。
+
+   故$H = \begin{bmatrix}-1 & 1 & 0 & 0 \\ 0 & -1 & 1 & 0 \\ 0 & 0 & -1 & 1 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & 1 & 0 \\ 0 & 0 & 0 & 1 \end{bmatrix}$。
+
 2. 据上问，最大似然估计可转换为最小二乘问题：
+
    $\bold{x}^∗ = \arg \min \frac{1}{2}(\bold{z} − \bold{H}\bold{x})^T\bold{W}^{−1}(\bold{z} − \bold{H}\bold{x})$
    其中$\bold{W}$为此问题的信息矩阵，可以从最大似然的概率定义给出。请给出此问题下$\bold{W}$的具体取值。
+
+   答：
+
+   与课件第25页的公式：
+
+   $z_{k,j} = h(y_j, x_k) + v_{k,j}$
+
+   $v_k = N(0, Q_{k,j})$
+
+   $\bold{x}^∗ = \arg \min (\bold{z_{k,j}} − h(\bold{x_k}, \bold{y_j}))^T\bold{Q_{k,j}}^{−1}(\bold{z_{k,j}} − h(\bold{x_k}, \bold{y_j}))$
+
+   课件第26页给出的误差函数：$J(x) = \sum_{k} e_{v,k}^TR_k^{-1}e_{v,k} + \sum_k\sum_je_{y,k,j}^TQ_{k,j}^{-1}e_{y,k,j}$。
+
+   在只有一个路标的情况下，下标$j$可省略：$J(x) = \sum_{k} e_{v,k}^TR_k^{-1}e_{v,k} + \sum_ke_{y,k}^TQ_{k}^{-1}e_{y,k}$。
+
+   并且在一维的道路上，$e_{v,k}$，$e_{y,k}$，$R_k$及$Q_k$皆为纯量。
+
+   令$e_v \triangleq [e_{v,1}, e_{v,2}, ..., e_{v,k}]^T$，$e_y \triangleq [e_{y,1}, e_{y,2}, ..., e_{y,k}]^T$。
+
+   $e_{combined} \triangleq [e_{v}^T, e_{y}^T]^T$，也就是把运动方程的误差和观测方程的误差拼接在一起。
+
+   令$C_{combined} = \begin{bmatrix}R_k & 0 & ... & 0 & 0 \\ 0 & R_k & ... & 0 & 0 \\ 0 & 0 & ... & Q_k & 0 \\ 0 & 0 & ... & 0 & Q_k\end{bmatrix}$，也就是把运动方程的误差和观测方程的协方差矩阵拼接在一起。
+
+   $J(x)$可被写成$J(x) = e_{combined}^TC_{combined}e_{combined}$
+
+   与题目的$\bold{x}^∗ = \arg \min \frac{1}{2}(\bold{z} − \bold{H}\bold{x})^T\bold{W}^{−1}(\bold{z} − \bold{H}\bold{x})$对照可知：$\bold{z} − \bold{H}\bold{x}$对应$e_{combined}$，$\bold{W}$对应$C_{combined}$。
+
+   题目中的$k=3$，因此$W = \begin{bmatrix}Q & 0 & 0 & 0 & 0 & 0 \\ 0 & Q & 0 & 0 & 0 & 0 \\ 0 & 0 & Q & 0 & 0 & 0 \\ 0 & 0 & 0 & R & 0 & 0 \\ 0 & 0 & 0 & 0 & R & 0 \\ 0 & 0 & 0 & 0 & 0 & R\end{bmatrix}$。
+
 3. 假设所有噪声相互无关，该问题存在唯一的解吗？若有，唯一解是什么？若没有，说明理由。
+
+   答：
+
+   参考[Approximate Solution of an Overdetermined System of Equations](https://link.springer.com/content/pdf/bbm%3A978-1-4471-2227-2%2F1.pdf)：
+
+   > The classical least squares problem has an analytic solution: assuming that the matrix A is full column rank, the unique least squares approximate solution is $X =( A^TA^{-1})A^TB$
+   
+   此最小二乘问题可表达为$\bold{H}\bold{x} \approx \bold{z}$，并且矩阵$\bold{H}$为full column rank，故存在唯一解$\bold{X} = (H^TH^{-1})H^TB$。
 
