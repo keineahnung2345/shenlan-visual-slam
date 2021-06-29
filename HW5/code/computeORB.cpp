@@ -50,9 +50,9 @@ int main(int argc, char **argv) {
     cv::Mat second_image = cv::imread(second_file, 0);  // load grayscale image
 
     // plot the image
-    cv::imshow("first image", first_image);
-    cv::imshow("second image", second_image);
-    cv::waitKey(0);
+    // cv::imshow("first image", first_image);
+    // cv::imshow("second image", second_image);
+    // cv::waitKey(0);
 
     // detect FAST keypoints using threshold=40
     vector<cv::KeyPoint> keypoints;
@@ -70,9 +70,9 @@ int main(int argc, char **argv) {
     cv::Mat image_show;
     cv::drawKeypoints(first_image, keypoints, image_show, cv::Scalar::all(-1),
                       cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
-    cv::imshow("features", image_show);
+    // cv::imshow("features", image_show);
     cv::imwrite("feat1.png", image_show);
-    cv::waitKey(0);
+    // cv::waitKey(0);
 
     // we can also match descriptors between images
     // same for the second
@@ -103,13 +103,45 @@ int main(int argc, char **argv) {
 }
 
 // -------------------------------------------------------------------------------------------------- //
+int computeMoment(const cv::Mat &image, const int cx, const int cy,
+    const int hl, const int p, const int q){
+    // hl: half length of the patch
+    int l = std::max(cx-hl, 0), r = std::min(cx+(hl-1), image.cols-1);
+    int t = std::max(cy-hl, 0), b = std::min(cy+(hl-1), image.rows-1);
+    int moment = 0;
+    
+    //https://stackoverflow.com/questions/25642532/opencv-pointx-y-represent-column-row-or-row-column
+    for(int y = t; y <= b; ++y){
+        for(int x = l; x <= r; ++x){
+            if(p == 1 && q == 0){
+                moment += image.at<uchar>(y, x) * x;
+            }else if(p == 0 && q == 1){
+                moment += image.at<uchar>(y, x) * y;
+            }else if(p == 0 && q == 0){
+                moment += image.at<uchar>(y, x);
+            }else if(p == 1 && q == 1){
+                moment += image.at<uchar>(y, x) * x * y;
+            }
+        }
+    }
+
+    return moment;
+}
 
 // compute the angle
 void computeAngle(const cv::Mat &image, vector<cv::KeyPoint> &keypoints) {
     int half_patch_size = 8;
     for (auto &kp : keypoints) {
-	// START YOUR CODE HERE (~7 lines)
-        kp.angle = 0; // compute kp.angle 
+	    // START YOUR CODE HERE (~7 lines)
+        int m10 = computeMoment(image, kp.pt.x, kp.pt.y, 8, 1, 0);
+        int m01 = computeMoment(image, kp.pt.x, kp.pt.y, 8, 0, 1);
+        int m00 = computeMoment(image, kp.pt.x, kp.pt.y, 8, 0, 0);
+        cv::Point2f(static_cast<double>(m10)/m00, static_cast<double>(m01)/m00);
+        // std::atan: return radian
+        // cv::Point::angle: degree
+        kp.angle = std::atan2(static_cast<double>(m10)/m00-kp.pt.y, 
+            static_cast<double>(m01)/m00-kp.pt.x) / M_PI * 180.0;
+        // kp.angle = std::atan(static_cast<double>(m01)/m10) / M_PI * 180.0; // compute kp.angle 
         // END YOUR CODE HERE
     }
     return;
@@ -382,8 +414,22 @@ void computeORBDesc(const cv::Mat &image, vector<cv::KeyPoint> &keypoints, vecto
         DescType d(256, false);
         for (int i = 0; i < 256; i++) {
             // START YOUR CODE HERE (~7 lines)
-            d[i] = 0;  // if kp goes outside, set d.clear()
-	    // END YOUR CODE HERE
+            int cx = kp.pt.x, cy = kp.pt.y;
+            int px = cx + ORB_pattern[i*4], py = cy + ORB_pattern[i*4+1];
+            int qx = cx + ORB_pattern[i*4+2], qy = cy + ORB_pattern[i*4+3];
+            double angle_rad = kp.angle / 180.0 * M_PI;
+            int px_rot = std::round(std::cos(angle_rad) * px - std::sin(angle_rad) * py);
+            int py_rot = std::round(std::sin(angle_rad) * px + std::cos(angle_rad) * py);
+            int qx_rot = std::round(std::cos(angle_rad) * qx - std::sin(angle_rad) * qy);
+            int qy_rot = std::round(std::sin(angle_rad) * qx + std::cos(angle_rad) * qy);
+            if(px_rot < 0 || px_rot >= image.cols || py_rot < 0 || py_rot >= image.rows ||
+               qx_rot < 0 || qx_rot >= image.cols || qy_rot < 0 || qy_rot >= image.rows){
+                // if kp goes outside, set d.clear()
+                d.clear();
+                break;
+            }
+            d[i] = !(image.at<uchar>(py_rot, px_rot) > image.at<uchar>(qy_rot, qx_rot));
+	        // END YOUR CODE HERE
         }
         desc.push_back(d);
     }
@@ -402,6 +448,25 @@ void bfMatch(const vector<DescType> &desc1, const vector<DescType> &desc2, vecto
 
     // START YOUR CODE HERE (~12 lines)
     // find matches between desc1 and desc2. 
+    size_t i, j;
+    for(i = 0; i < desc1.size(); ++i){
+        if(desc1[i].empty()) continue;
+        int minj = -1, mind = std::numeric_limits<int>::max();
+        for(j = 0; j < desc2.size(); ++j){
+            if(desc2[j].empty()) continue;
+            int d = 0;
+            for(size_t k = 0; k < desc1[i].size(); ++k){
+                d += (desc1[i][k] != desc2[j][k]);
+            }
+            if(d < mind){
+                minj = j;
+                mind = d;
+            }
+        }
+        if(mind < d_max){
+            matches.push_back(cv::DMatch(i, minj, mind));
+        }
+    }
     // END YOUR CODE HERE
 
     for (auto &m: matches) {
