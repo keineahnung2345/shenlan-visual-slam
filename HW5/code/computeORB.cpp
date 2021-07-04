@@ -41,10 +41,14 @@ void computeORBDesc(const cv::Mat &image, vector<cv::KeyPoint> &keypoints, vecto
  * @param desc2 the second descriptor
  * @param matches matches of two images
  */
-void bfMatch(const vector<DescType> &desc1, const vector<DescType> &desc2, vector<cv::DMatch> &matches);
+void bfMatch(const vector<DescType> &desc1, const vector<DescType> &desc2, vector<cv::DMatch> &matches, int d_max = 50);
 
 int main(int argc, char **argv) {
 
+    int d_max = 50;
+    if(argc > 1){
+        d_max = stoi(argv[1]);
+    }
     // load image
     cv::Mat first_image = cv::imread(first_file, 0);    // load grayscale image
     cv::Mat second_image = cv::imread(second_file, 0);  // load grayscale image
@@ -94,7 +98,7 @@ int main(int argc, char **argv) {
     // find matches
     vector<cv::DMatch> matches;
     t1 = chrono::steady_clock::now();
-    bfMatch(descriptors, descriptors2, matches);
+    bfMatch(descriptors, descriptors2, matches, d_max);
     t2 = chrono::steady_clock::now();
     time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
     cout << "match ORB cost = " << time_used.count() << " seconds. " << endl;
@@ -472,9 +476,7 @@ void computeORBDesc(const cv::Mat &image, vector<cv::KeyPoint> &keypoints, vecto
 }
 
 // brute-force matching
-void bfMatch(const vector<DescType> &desc1, const vector<DescType> &desc2, vector<cv::DMatch> &matches) {
-    int d_max = 50;
-
+void bfMatch(const vector<DescType> &desc1, const vector<DescType> &desc2, vector<cv::DMatch> &matches, int d_max) {
     // START YOUR CODE HERE (~12 lines)
     // find matches between desc1 and desc2. 
     size_t i, j;
