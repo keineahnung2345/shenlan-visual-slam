@@ -58,6 +58,8 @@ void computeAngle(const cv::Mat &image, vector<cv::KeyPoint> &keypoints) {
 
 ORB 描述的计算：
 
+以下是一开始写出的代码：
+
 ```cpp
 // compute the descriptor
 void computeORBDesc(const cv::Mat &image, vector<cv::KeyPoint> &keypoints, vector<DescType> &desc) {
@@ -94,7 +96,47 @@ void computeORBDesc(const cv::Mat &image, vector<cv::KeyPoint> &keypoints, vecto
 }
 ```
 
+上面的代码犯了一个错：先把`ORB_pattern`的offset加到特征点坐标上再做旋转。应该是先对`ORB_pattern`做旋转，再把旋转后的offset加到特征点坐标上才对。
 
+以下是修正后的代码：
+
+```cpp
+void computeORBDesc(const cv::Mat &image, vector<cv::KeyPoint> &keypoints, vector<DescType> &desc) {
+    for (auto &kp: keypoints) {
+        DescType d(256, false);
+        for (int i = 0; i < 256; i++) {
+            // START YOUR CODE HERE (~7 lines)
+            int cx = kp.pt.x, cy = kp.pt.y;
+            double angle_rad = kp.angle / 180.0 * M_PI;
+            double cos_theta = std::cos(angle_rad), sin_theta = std::sin(angle_rad);
+            int pox = std::round(cos_theta * ORB_pattern[i*4] - sin_theta * ORB_pattern[i*4+1]);
+            int poy = std::round(sin_theta * ORB_pattern[i*4] + cos_theta * ORB_pattern[i*4+1]);
+            int qox = std::round(cos_theta * ORB_pattern[i*4+2] - sin_theta * ORB_pattern[i*4+3]);
+            int qoy = std::round(sin_theta * ORB_pattern[i*4+2] + cos_theta * ORB_pattern[i*4+3]);
+            int px_rot = cx + pox;
+            int py_rot = cy + poy;
+            int qx_rot = cx + qox;
+            int qy_rot = cy + qoy;
+            if(px_rot < 0 || px_rot >= image.cols || py_rot < 0 || py_rot >= image.rows ||
+               qx_rot < 0 || qx_rot >= image.cols || qy_rot < 0 || qy_rot >= image.rows){
+                // if kp goes outside, set d.clear()
+                d.clear();
+                break;
+            }
+            d[i] = !(image.at<uchar>(py_rot, px_rot) > image.at<uchar>(qy_rot, qx_rot));
+	        // END YOUR CODE HERE
+        }
+        desc.push_back(d);
+    }
+
+    int bad = 0;
+    for (auto &d: desc) {
+        if (d.empty()) bad++;
+    }
+    cout << "bad/total: " << bad << "/" << desc.size() << endl;
+    return;
+}
+```
 
 ### 暴力匹配
 
@@ -135,13 +177,45 @@ void bfMatch(const vector<DescType> &desc1, const vector<DescType> &desc2, vecto
 }
 ```
 
+### 运行结果
+
+![feat1](feat1.png)
+
+![matches](matches.png)
+
+```
+bad/total: 43/638
+keypoints: 595
+bad/total: 7/595
+extract ORB cost = 0.0126146 seconds. 
+match ORB cost = 0.135926 seconds. 
+matches: 106
+done.
+```
+
 1. 为什么说 ORB 是一种二进制特征？
 
    如果用一个bit表示BRIEF描述里的一次像素间的比较，那么整个ORB特征便可以用256或128 bit的空间表示，每个bit都有其意义。
 
 2. 为什么在匹配时使用 50 作为阈值，取更大或更小值会怎么样？
 
+   `d_max`越小表示标准越严格，所以匹配对会变少；`d_max`越大表示标准越宽松，所以匹配对会变多。
+
+   以下是取`d_max`为40及20的结果。
+
+   ![matches_40](matches_40.png)
+
+   ![matches_20](matches_20.png)
+
+   以下是取`d_max`为800及100的结果。
+
+   ![matches_80](matches_80.png)![matches_100](matches_100.png)
+
+   可以印证上面的结论。
+
 3. 暴力匹配在你的机器上表现如何？你能想到什么减少计算量的匹配方法吗？  
+
+   暴力匹配在我的机器上花了0.13秒。参考[OpenCV - Feature Matching](https://docs.opencv.org/master/dc/dc3/tutorial_py_matcher.html)，可以把ORB特征当成128维空间里的点，因此可以为空间中的所有点建立一个tree，然后使用KNN进行搜索。
 
 ## 从 E 恢复 R, t
 
@@ -189,13 +263,61 @@ cout << "t2 = " << Sophus::SO3d::vee(t_wedge2).transpose() << endl;
 // END YOUR CODE HERE
 ```
 
-验证 t^R 应该与 E 只差一个乘法因子
+验证 t^R 应该与 E 只差一个乘法因子：
+
+加入以下代码验证：
 
 ```cpp
+Array33d arr_E(E);
+Array33d arr_tR1(tR1);
+Array33d arr_tR2(tR2);
+Array33d arr_tR3(tR3);
+Array33d arr_tR4(tR4);
 
+cout << "t^R(1) = " << endl << tR1 << endl << "ratio w/ E:" << endl << arr_tR1 / arr_E << endl;
+cout << "t^R(2) = " << endl << tR2 << endl << "ratio w/ E:" << endl << arr_tR2 / arr_E << endl;
+cout << "t^R(3) = " << endl << tR3 << endl << "ratio w/ E:" << endl << arr_tR3 / arr_E << endl;
+cout << "t^R(4) = " << endl << tR4 << endl << "ratio w/ E:" << endl << arr_tR4 / arr_E << endl;
 ```
 
+输出为：
 
+```
+t^R(1) = 
+ -0.0203619   -0.400711  -0.0332407
+   0.393927   -0.035064    0.585711
+-0.00678849   -0.581543  -0.0143826
+ratio w/ E:
+1 1 1
+1 1 1
+1 1 1
+t^R(2) = 
+ 0.0203619   0.400711  0.0332407
+ -0.393927   0.035064  -0.585711
+0.00678849   0.581543  0.0143826
+ratio w/ E:
+-1 -1 -1
+-1 -1 -1
+-1 -1 -1
+t^R(3) = 
+ 0.0203619   0.400711  0.0332407
+ -0.393927   0.035064  -0.585711
+0.00678849   0.581543  0.0143826
+ratio w/ E:
+-1 -1 -1
+-1 -1 -1
+-1 -1 -1
+t^R(4) = 
+ -0.0203619   -0.400711  -0.0332407
+   0.393927   -0.035064    0.585711
+-0.00678849   -0.581543  -0.0143826
+ratio w/ E:
+1 1 1
+1 1 1
+1 1 1
+```
+
+可以看到在四组估计出来的$t\text{^}R$中，有两个与基础矩阵一致，另外两个与基础矩阵差了一个系数-1。
 
 ## 用 G-N 实现 Bundle Adjustment 中的位姿估计
 

@@ -67,10 +67,16 @@ int main(int argc, char **argv) {
     Matrix3d tR4 = t_wedge2 * R2;
     // tR1 equals tR4 and tR2 equals tR3?
     // tR1 and tR4 equals to E
-    cout << "t^R = " << endl << tR1 << endl;
-    cout << "t^R = " << endl << tR2 << endl;
-    cout << "t^R = " << endl << tR3 << endl;
-    cout << "t^R = " << endl << tR4 << endl;
 
+    Array33d arr_E(E);
+    Array33d arr_tR1(tR1);
+    Array33d arr_tR2(tR2);
+    Array33d arr_tR3(tR3);
+    Array33d arr_tR4(tR4);
+
+    cout << "t^R(1) = " << endl << tR1 << endl << "ratio w/ E:" << endl << arr_tR1 / arr_E << endl;
+    cout << "t^R(2) = " << endl << tR2 << endl << "ratio w/ E:" << endl << arr_tR2 / arr_E << endl;
+    cout << "t^R(3) = " << endl << tR3 << endl << "ratio w/ E:" << endl << arr_tR3 / arr_E << endl;
+    cout << "t^R(4) = " << endl << tR4 << endl << "ratio w/ E:" << endl << arr_tR4 / arr_E << endl;
     return 0;
 }
