@@ -136,7 +136,9 @@ void computeAngle(const cv::Mat &image, vector<cv::KeyPoint> &keypoints) {
         int m10 = computeMoment(image, kp.pt.x, kp.pt.y, 8, 1, 0);
         int m01 = computeMoment(image, kp.pt.x, kp.pt.y, 8, 0, 1);
         int m00 = computeMoment(image, kp.pt.x, kp.pt.y, 8, 0, 0);
-        cv::Point2f(static_cast<double>(m10)/m00, static_cast<double>(m01)/m00);
+        // https://stackoverflow.com/questions/21613246/what-is-the-structure-of-point2f-in-opencv
+        // img.at<uchar>(pt.y, pt.x)
+        // cv::Point2f pt(static_cast<double>(m10)/m00, static_cast<double>(m01)/m00);
         // std::atan: return radian
         // cv::Point::angle: degree
         kp.angle = std::atan2(static_cast<double>(m10)/m00-kp.pt.y, 
