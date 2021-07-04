@@ -56,6 +56,7 @@ int main(int argc, char **argv) {
 
     // detect FAST keypoints using threshold=40
     vector<cv::KeyPoint> keypoints;
+    chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
     cv::FAST(first_image, keypoints, 40);
     cout << "keypoints: " << keypoints.size() << endl;
 
@@ -65,14 +66,6 @@ int main(int argc, char **argv) {
     // compute ORB descriptors
     vector<DescType> descriptors;
     computeORBDesc(first_image, keypoints, descriptors);
-
-    // plot the keypoints
-    cv::Mat image_show;
-    cv::drawKeypoints(first_image, keypoints, image_show, cv::Scalar::all(-1),
-                      cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
-    // cv::imshow("features", image_show);
-    cv::imwrite("feat1.png", image_show);
-    // cv::waitKey(0);
 
     // we can also match descriptors between images
     // same for the second
@@ -86,10 +79,25 @@ int main(int argc, char **argv) {
     // compute ORB descriptors
     vector<DescType> descriptors2;
     computeORBDesc(second_image, keypoints2, descriptors2);
+    chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
+    chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
+    cout << "extract ORB cost = " << time_used.count() << " seconds. " << endl;
+
+    // plot the keypoints
+    cv::Mat image_show;
+    cv::drawKeypoints(first_image, keypoints, image_show, cv::Scalar::all(-1),
+                      cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
+    // cv::imshow("features", image_show);
+    cv::imwrite("feat1.png", image_show);
+    // cv::waitKey(0);
 
     // find matches
     vector<cv::DMatch> matches;
+    t1 = chrono::steady_clock::now();
     bfMatch(descriptors, descriptors2, matches);
+    t2 = chrono::steady_clock::now();
+    time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
+    cout << "match ORB cost = " << time_used.count() << " seconds. " << endl;
     cout << "matches: " << matches.size() << endl;
 
     // plot the matches
@@ -141,8 +149,12 @@ void computeAngle(const cv::Mat &image, vector<cv::KeyPoint> &keypoints) {
         // cv::Point2f pt(static_cast<double>(m10)/m00, static_cast<double>(m01)/m00);
         // std::atan: return radian
         // cv::Point::angle: degree
-        kp.angle = std::atan2(static_cast<double>(m10)/m00-kp.pt.y, 
-            static_cast<double>(m01)/m00-kp.pt.x) / M_PI * 180.0;
+        kp.angle = std::atan2(static_cast<double>(m10)/m00-kp.pt.x, 
+            static_cast<double>(m01)/m00-kp.pt.y) / M_PI * 180.0;
+        // cout << "kp: " << kp.pt.x << ", " << kp.pt.y << endl;
+        // cout << "m00: " << m00 << ", m10: " << m10 << ", m01: " << m01 << endl;
+        // cout << "offset: " << static_cast<double>(m10)/m00-kp.pt.x << ", " << 
+            // static_cast<double>(m01)/m00-kp.pt.y << endl;
         // kp.angle = std::atan(static_cast<double>(m01)/m10) / M_PI * 180.0; // compute kp.angle 
         // END YOUR CODE HERE
     }
@@ -417,6 +429,11 @@ void computeORBDesc(const cv::Mat &image, vector<cv::KeyPoint> &keypoints, vecto
         for (int i = 0; i < 256; i++) {
             // START YOUR CODE HERE (~7 lines)
             int cx = kp.pt.x, cy = kp.pt.y;
+            double angle_rad = kp.angle / 180.0 * M_PI;
+            /** note:
+             * rotate on the offset and then add the offset to the cener, 
+             * not adding offset and then rotate on (px, py) and (qx, qy)
+             * the following is wrong!
             int px = cx + ORB_pattern[i*4], py = cy + ORB_pattern[i*4+1];
             int qx = cx + ORB_pattern[i*4+2], qy = cy + ORB_pattern[i*4+3];
             double angle_rad = kp.angle / 180.0 * M_PI;
@@ -424,6 +441,16 @@ void computeORBDesc(const cv::Mat &image, vector<cv::KeyPoint> &keypoints, vecto
             int py_rot = std::round(std::sin(angle_rad) * px + std::cos(angle_rad) * py);
             int qx_rot = std::round(std::cos(angle_rad) * qx - std::sin(angle_rad) * qy);
             int qy_rot = std::round(std::sin(angle_rad) * qx + std::cos(angle_rad) * qy);
+             **/
+            double cos_theta = std::cos(angle_rad), sin_theta = std::sin(angle_rad);
+            int pox = std::round(cos_theta * ORB_pattern[i*4] - sin_theta * ORB_pattern[i*4+1]);
+            int poy = std::round(sin_theta * ORB_pattern[i*4] + cos_theta * ORB_pattern[i*4+1]);
+            int qox = std::round(cos_theta * ORB_pattern[i*4+2] - sin_theta * ORB_pattern[i*4+3]);
+            int qoy = std::round(sin_theta * ORB_pattern[i*4+2] + cos_theta * ORB_pattern[i*4+3]);
+            int px_rot = cx + pox;
+            int py_rot = cy + poy;
+            int qx_rot = cx + qox;
+            int qy_rot = cy + qoy;
             if(px_rot < 0 || px_rot >= image.cols || py_rot < 0 || py_rot >= image.rows ||
                qx_rot < 0 || qx_rot >= image.cols || qy_rot < 0 || qy_rot >= image.rows){
                 // if kp goes outside, set d.clear()
@@ -471,8 +498,8 @@ void bfMatch(const vector<DescType> &desc1, const vector<DescType> &desc2, vecto
     }
     // END YOUR CODE HERE
 
-    for (auto &m: matches) {
-        cout << m.queryIdx << ", " << m.trainIdx << ", " << m.distance << endl;
-    }
+    // for (auto &m: matches) {
+    //     cout << m.queryIdx << ", " << m.trainIdx << ", " << m.distance << endl;
+    // }
     return;
 }

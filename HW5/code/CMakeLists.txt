@@ -23,5 +23,5 @@ target_link_libraries(E2Rt Sophus::Sophus fmt::fmt)
 add_executable(GN-BA GN-BA.cpp)
 target_link_libraries(GN-BA Sophus::Sophus fmt::fmt)
 
-add_executable(ICP ICP.cpp)
-target_link_libraries(ICP Sophus::Sophus ${Pangolin_LIBRARIES} fmt::fmt)
+# add_executable(ICP ICP.cpp)
+# target_link_libraries(ICP Sophus::Sophus ${Pangolin_LIBRARIES} fmt::fmt)
