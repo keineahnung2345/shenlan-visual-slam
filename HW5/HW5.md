@@ -1,0 +1,292 @@
+# HW5
+
+## ORB 特征点
+
+### ORB 提取
+
+计算ORB的旋转：
+
+```cpp
+// -------------------------------------------------------------------------------------------------- //
+int computeMoment(const cv::Mat &image, const int cx, const int cy,
+    const int hl, const int p, const int q){
+    // hl: half length of the patch
+    int l = std::max(cx-hl, 0), r = std::min(cx+(hl-1), image.cols-1);
+    int t = std::max(cy-hl, 0), b = std::min(cy+(hl-1), image.rows-1);
+    int moment = 0;
+    
+    //https://stackoverflow.com/questions/25642532/opencv-pointx-y-represent-column-row-or-row-column
+    for(int y = t; y <= b; ++y){
+        for(int x = l; x <= r; ++x){
+            if(p == 1 && q == 0){
+                moment += image.at<uchar>(y, x) * x;
+            }else if(p == 0 && q == 1){
+                moment += image.at<uchar>(y, x) * y;
+            }else if(p == 0 && q == 0){
+                moment += image.at<uchar>(y, x);
+            }else if(p == 1 && q == 1){
+                moment += image.at<uchar>(y, x) * x * y;
+            }
+        }
+    }
+
+    return moment;
+}
+
+// compute the angle
+void computeAngle(const cv::Mat &image, vector<cv::KeyPoint> &keypoints) {
+    int half_patch_size = 8;
+    for (auto &kp : keypoints) {
+	    // START YOUR CODE HERE (~7 lines)
+        int m10 = computeMoment(image, kp.pt.x, kp.pt.y, 8, 1, 0);
+        int m01 = computeMoment(image, kp.pt.x, kp.pt.y, 8, 0, 1);
+        int m00 = computeMoment(image, kp.pt.x, kp.pt.y, 8, 0, 0);
+        // std::atan: return radian
+        // cv::Point::angle: degree
+        kp.angle = std::atan2(static_cast<double>(m10)/m00-kp.pt.y, 
+            static_cast<double>(m01)/m00-kp.pt.x) / M_PI * 180.0;
+        // kp.angle = std::atan(static_cast<double>(m01)/m10) / M_PI * 180.0; // compute kp.angle 
+        // END YOUR CODE HERE
+    }
+    return;
+}
+```
+
+
+
+### ORB 描述
+
+ORB 描述的计算：
+
+```cpp
+// compute the descriptor
+void computeORBDesc(const cv::Mat &image, vector<cv::KeyPoint> &keypoints, vector<DescType> &desc) {
+    for (auto &kp: keypoints) {
+        DescType d(256, false);
+        for (int i = 0; i < 256; i++) {
+            // START YOUR CODE HERE (~7 lines)
+            int cx = kp.pt.x, cy = kp.pt.y;
+            int px = cx + ORB_pattern[i*4], py = cy + ORB_pattern[i*4+1];
+            int qx = cx + ORB_pattern[i*4+2], qy = cy + ORB_pattern[i*4+3];
+            double angle_rad = kp.angle / 180.0 * M_PI;
+            int px_rot = std::round(std::cos(angle_rad) * px - std::sin(angle_rad) * py);
+            int py_rot = std::round(std::sin(angle_rad) * px + std::cos(angle_rad) * py);
+            int qx_rot = std::round(std::cos(angle_rad) * qx - std::sin(angle_rad) * qy);
+            int qy_rot = std::round(std::sin(angle_rad) * qx + std::cos(angle_rad) * qy);
+            if(px_rot < 0 || px_rot >= image.cols || py_rot < 0 || py_rot >= image.rows ||
+               qx_rot < 0 || qx_rot >= image.cols || qy_rot < 0 || qy_rot >= image.rows){
+                // if kp goes outside, set d.clear()
+                d.clear();
+                break;
+            }
+            d[i] = !(image.at<uchar>(py_rot, px_rot) > image.at<uchar>(qy_rot, qx_rot));
+	        // END YOUR CODE HERE
+        }
+        desc.push_back(d);
+    }
+
+    int bad = 0;
+    for (auto &d: desc) {
+        if (d.empty()) bad++;
+    }
+    cout << "bad/total: " << bad << "/" << desc.size() << endl;
+    return;
+}
+```
+
+
+
+### 暴力匹配
+
+暴力匹配：
+
+```cpp
+// brute-force matching
+void bfMatch(const vector<DescType> &desc1, const vector<DescType> &desc2, vector<cv::DMatch> &matches) {
+    int d_max = 50;
+
+    // START YOUR CODE HERE (~12 lines)
+    // find matches between desc1 and desc2. 
+    size_t i, j;
+    for(i = 0; i < desc1.size(); ++i){
+        if(desc1[i].empty()) continue;
+        int minj = -1, mind = std::numeric_limits<int>::max();
+        for(j = 0; j < desc2.size(); ++j){
+            if(desc2[j].empty()) continue;
+            int d = 0;
+            for(size_t k = 0; k < desc1[i].size(); ++k){
+                d += (desc1[i][k] != desc2[j][k]);
+            }
+            if(d < mind){
+                minj = j;
+                mind = d;
+            }
+        }
+        if(mind < d_max){
+            matches.push_back(cv::DMatch(i, minj, mind));
+        }
+    }
+    // END YOUR CODE HERE
+
+    for (auto &m: matches) {
+        cout << m.queryIdx << ", " << m.trainIdx << ", " << m.distance << endl;
+    }
+    return;
+}
+```
+
+1. 为什么说 ORB 是一种二进制特征？
+
+   如果用一个bit表示BRIEF描述里的一次像素间的比较，那么整个ORB特征便可以用256或128 bit的空间表示，每个bit都有其意义。
+
+2. 为什么在匹配时使用 50 作为阈值，取更大或更小值会怎么样？
+
+3. 暴力匹配在你的机器上表现如何？你能想到什么减少计算量的匹配方法吗？  
+
+## 从 E 恢复 R, t
+
+对 E 作 SVD 分解
+
+```cpp
+// SVD and fix sigular values
+// START YOUR CODE HERE
+JacobiSVD<Matrix3d> svd(E, ComputeFullU | ComputeFullV);
+Matrix3d U = svd.matrixU();
+Matrix3d V = svd.matrixV();
+Vector3d Sing = svd.singularValues();
+```
+
+处理 Σ 的奇异值
+
+```cpp
+Eigen::DiagonalMatrix<double, 3> S((Sing[0]+Sing[1])/2, (Sing[0]+Sing[1])/2, 0);
+// END YOUR CODE HERE
+```
+
+共存在四个可能的解
+
+```cpp
+// set t1, t2, R1, R2 
+// START YOUR CODE HERE
+// compute rotation matrix from Sophus::SO3d?
+// (x, y) -> (-y, x)
+Matrix3d Rz_p90 = AngleAxisd(M_PI/2.0, Vector3d(0, 0, 1)).toRotationMatrix();
+// (x, y) -> (y, -x)
+Matrix3d Rz_n90 = AngleAxisd(-M_PI/2.0, Vector3d(0, 0, 1)).toRotationMatrix();
+cout << "Rotate 90: " << endl << Rz_p90 << endl;
+cout << "Rotate -90: " << endl << Rz_n90 << endl;
+// t_wedge1 = t_wedge2 * (-1)
+Matrix3d t_wedge1 = U * Rz_p90 * S * U.transpose(); //上尖尖
+Matrix3d t_wedge2 = U * Rz_n90 * S * U.transpose();
+
+Matrix3d R1 = U * Rz_p90.transpose() * V.transpose();
+Matrix3d R2 = U * Rz_n90.transpose() * V.transpose();
+
+cout << "R1 = " << endl << R1 << endl;
+cout << "R2 = " << endl << R2 << endl;
+cout << "t1 = " << Sophus::SO3d::vee(t_wedge1).transpose() << endl;
+cout << "t2 = " << Sophus::SO3d::vee(t_wedge2).transpose() << endl;
+// END YOUR CODE HERE
+```
+
+验证 t^R 应该与 E 只差一个乘法因子
+
+```cpp
+
+```
+
+
+
+## 用 G-N 实现 Bundle Adjustment 中的位姿估计
+
+读取三维点和二维点坐标：
+
+```cpp
+// load points in to p3d and p2d 
+// START YOUR CODE HERE
+std::ifstream infile(p3d_file);
+double x, y, z;
+while (infile >> x >> y >> z){
+    p3d.emplace_back(x, y, z);
+}
+infile = ifstream(p2d_file);
+while (infile >> x >> y){
+    p2d.emplace_back(x, y);
+}
+
+// END YOUR CODE HERE
+```
+
+计算重投影误差和Jacobian：
+
+```cpp
+// compute cost for p3d[I] and p2d[I]
+// START YOUR CODE HERE 
+// world coord -> camera coord: P'
+Vector3d p3d_cam = T_esti.rotationMatrix() * p3d[i] + T_esti.translation(); //T_esti * p3d[i];?
+// depth: p3d_cam[2], not p3d[i][2]!
+Vector2d e = p2d[i] - (1/p3d_cam[2] * K * p3d_cam).block<2,1>(0,0);
+cost += pow(e.norm(), 2);
+// END YOUR CODE HERE
+
+// compute jacobian
+Matrix<double, 2, 6> J;
+// START YOUR CODE HERE 
+double Xp = p3d_cam.coeff(0), Yp = p3d_cam.coeff(1), Zp = p3d_cam.coeff(2);
+J(0, 0) = fx / Zp;
+J(0, 1) = 0;
+J(0, 2) = -fx * Xp/ (Zp * Zp);
+J(0, 3) = -fx * Xp * Yp / (Zp * Zp);
+J(0, 4) = fx + fx * Xp * Xp / (Zp * Zp);
+J(0, 5) = -fx * Yp / Zp;
+J(1, 0) = 0;
+J(1, 1) = fy / Zp;
+J(1, 2) = -fy * Yp / (Zp * Zp);
+J(1, 3) = -fy - fy * Yp * Yp / (Zp * Zp);
+J(1, 4) = fy * Xp * Yp / (Zp * Zp);
+J(1, 5) = fy * Xp / Zp;
+J *= -1;
+// END YOUR CODE HERE
+```
+
+求解更新量：
+
+```cpp
+// solve dx 
+Vector6d dx;
+
+// START YOUR CODE HERE 
+dx = H.ldlt().solve(b);
+// cout << "dx: " << dx.transpose() << endl;
+// END YOUR CODE HERE
+```
+
+将更新量更新至之前的估计上：
+
+```cpp
+// update your estimation
+// START YOUR CODE HERE 
+// xi: [translation, rotation]
+T_esti.translation() += dx.head(3);
+// T_esti.rotationMatrix() returns const, it can't be updated!
+T_esti.setRotationMatrix(Sophus::SE3d::exp(dx.tail(3)).rotationMatrix() * T_esti.rotationMatrix()); //?
+// END YOUR CODE HERE
+```
+
+1. 如何定义重投影误差？
+
+   对于单对点：$e_i = u_i - \frac{1}{s_i} K \exp(\xi^\text{^})P_i$
+
+   综合所有点：$\frac{1}{2} \sum_{i=1}^n \Vert u_i - \frac{1}{s_i} K \exp(\xi^\text{^})P_i\Vert$
+
+2. 该误差关于自变量的雅可比矩阵是什么？
+
+   $\frac {\partial e}{\partial \delta \xi} = - \begin{bmatrix} \frac{f_x}{Z'} & 0 & -\frac{f_xX'}{Z'^2} & -\frac{f_xX'Y'}{Z'^2} & f_x + \frac{f_xX'^2}{Z'^2} & -\frac{f_xY'}{Z'} \\ 0 & \frac{f_y}{Z'} & -\frac{f_yY'}{Z'^2} & -f_y + \frac{f_yY'^2}{Z'^2} & \frac{f_yX'Y'}{Z'^2} & \frac{f_yX'}{Z'} \end{bmatrix}$
+
+3. 解出更新量之后，如何更新至之前的估计上？  
+
+   令更新量为`dx`，它是一个长度为6的向量，前三个元素代表平移，后三个代表旋转的李代数。
+
+   令之前的估计为`T_esti`，它是一个4 * 4的变换矩阵，包含一个平移向量和一个旋转矩阵。平移向量的更新：把`dx`的前三个元素加到之前估计的平移向量上；旋转矩阵的更新：对`dx`里的$so(3)$使用指数映射转成旋转矩阵后，左乘到之前的旋转矩阵上。
+
+## 用 ICP 实现轨迹对齐
