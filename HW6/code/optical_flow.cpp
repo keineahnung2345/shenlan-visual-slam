@@ -187,15 +187,17 @@ void OpticalFlowSingleLevel(
                 for (int y = -half_patch_size; y < half_patch_size; y++) {
 
                     // TODO START YOUR CODE HERE (~8 lines)
-                    double error = 0;
+                    // (+x,+y): move from the patch's center to the specific point on a patch
+                    double error = img1.at<uchar>(kp.pt.y+y, kp.pt.x+x) - 
+                        img2.at<uchar>(kp.pt.y+dy+y, kp.pt.x+dx+x);
                     Eigen::Vector2d J;  // Jacobian
                     if (inverse == false) {
                         // Forward Jacobian
                         /**
                          * J = [d(I2(x,y))/dx, d(I2(x,y))/dy]
                          **/
-                        J(0) = img2.at<uchar>(kp.pt.y+dy, kp.pt.x+dx+1) - img2.at<uchar>(kp.pt.y+dy, kp.pt.x+dx); //and then divided by 1?
-                        J(1) = img2.at<uchar>(kp.pt.y+dy+1, kp.pt.x+dx) - img2.at<uchar>(kp.pt.y+dy, kp.pt.x+dx);
+                        J(0) = img2.at<uchar>(kp.pt.y+dy+y, kp.pt.x+dx+x+1) - img2.at<uchar>(kp.pt.y+dy+y, kp.pt.x+dx+x); //and then divided by 1?
+                        J(1) = img2.at<uchar>(kp.pt.y+dy+y+1, kp.pt.x+dx+x) - img2.at<uchar>(kp.pt.y+dy+y, kp.pt.x+dx+x);
                     } else {
                         // Inverse Jacobian
                         // NOTE this J does not change when dx, dy is updated, so we can store it and only compute error
@@ -203,8 +205,8 @@ void OpticalFlowSingleLevel(
                          * J is the graident of T = (Tx, Ty)
                          * J = [d(I1(x,y))/dx, d(I1(x,y))/dy], 1 x 2
                          **/
-                        J(0) = img1.at<uchar>(kp.pt.y, kp.pt.x+1) - img1.at<uchar>(kp.pt.y, kp.pt.x); //and then divided by 1?
-                        J(1) = img1.at<uchar>(kp.pt.y+1, kp.pt.x) - img1.at<uchar>(kp.pt.y, kp.pt.x);
+                        J(0) = img1.at<uchar>(kp.pt.y+y, kp.pt.x+x+1) - img1.at<uchar>(kp.pt.y+y, kp.pt.x+x); //and then divided by 1?
+                        J(1) = img1.at<uchar>(kp.pt.y+y+1, kp.pt.x+x) - img1.at<uchar>(kp.pt.y+y, kp.pt.x+x);
                     }
 
                     // compute H, b and set cost;
@@ -222,17 +224,14 @@ void OpticalFlowSingleLevel(
                      * b is -I1(x, y) * I2(x, y) * J
                      **/
                     H += J * J.transpose();
-                    if(inverse == false){
-                        b += (img1.at<uchar>(kp.pt.y, kp.pt.x) - img2.at<uchar>(kp.pt.y+dy, kp.pt.x+dx)) * J;
-                    }else{
-                        /**
-                         * it should be b -= ... here and (dx, dy) -= update,
-                         * but two negatives make a positive,
-                         * so it becomes b += ... and (dx, dy) += update
-                         **/
-                        b += (img1.at<uchar>(kp.pt.y, kp.pt.x) - img2.at<uchar>(kp.pt.y+dy, kp.pt.x+dx)) * J;
-                    }
-                    cost = pow(img1.at<uchar>(kp.pt.y, kp.pt.x) - img2.at<uchar>(kp.pt.y+dy, kp.pt.x+dx), 2);
+                    /**
+                     * inverse mode:
+                     * it should be b -= ... here and (dx, dy) -= update,
+                     * but two negatives make a positive,
+                     * so it becomes b += ... and (dx, dy) += update
+                     **/
+                    b += (img1.at<uchar>(kp.pt.y+y, kp.pt.x+x) - img2.at<uchar>(kp.pt.y+dy+y, kp.pt.x+dx+x)) * J;
+                    cost += error * error;
                     // TODO END YOUR CODE HERE
                 }
 
