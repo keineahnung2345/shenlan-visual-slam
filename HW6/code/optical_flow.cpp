@@ -85,7 +85,7 @@ int main(int argc, char **argv) {
     // first use single level LK in the validation picture
     vector<KeyPoint> kp2_single;
     vector<bool> success_single;
-    OpticalFlowSingleLevel(img1, img2, kp1, kp2_single, success_single);
+    OpticalFlowSingleLevel(img1, img2, kp1, kp2_single, success_single, false);
 
     // then test multi-level LK
     vector<KeyPoint> kp2_multi;
@@ -127,6 +127,9 @@ int main(int argc, char **argv) {
         }
     }
 
+    // cv::imwrite("tracked_single_level.png", img2_single);
+    // cv::imwrite("tracked_multi_level.png", img2_multi);
+    // cv::imwrite("tracked_by_opencv.png", img2_CV);
     cv::imshow("tracked single level", img2_single);
     cv::imshow("tracked multi level", img2_multi);
     cv::imshow("tracked by opencv", img2_CV);
@@ -161,11 +164,18 @@ void OpticalFlowSingleLevel(
         bool succ = true; // indicate if this point succeeded
 
         // Gauss-Newton iterations
+        /**
+         * J^T * J * dx = - J^T * f
+         **/
         for (int iter = 0; iter < iterations; iter++) {
             Eigen::Matrix2d H = Eigen::Matrix2d::Zero();
             Eigen::Vector2d b = Eigen::Vector2d::Zero();
             cost = 0;
 
+            /**
+             * kp.pt.x + dx - (half_patch_size-1) < 0
+             * kp.pt.x + dx + half_patch_size >= img1.cols
+             **/
             if (kp.pt.x + dx <= half_patch_size || kp.pt.x + dx >= img1.cols - half_patch_size ||
                 kp.pt.y + dy <= half_patch_size || kp.pt.y + dy >= img1.rows - half_patch_size) {   // go outside
                 succ = false;
@@ -181,21 +191,55 @@ void OpticalFlowSingleLevel(
                     Eigen::Vector2d J;  // Jacobian
                     if (inverse == false) {
                         // Forward Jacobian
+                        /**
+                         * J = [d(I2(x,y))/dx, d(I2(x,y))/dy]
+                         **/
+                        J(0) = img2.at<uchar>(kp.pt.y+dy, kp.pt.x+dx+1) - img2.at<uchar>(kp.pt.y+dy, kp.pt.x+dx); //and then divided by 1?
+                        J(1) = img2.at<uchar>(kp.pt.y+dy+1, kp.pt.x+dx) - img2.at<uchar>(kp.pt.y+dy, kp.pt.x+dx);
                     } else {
                         // Inverse Jacobian
                         // NOTE this J does not change when dx, dy is updated, so we can store it and only compute error
+                        /**
+                         * J is the graident of T = (Tx, Ty)
+                         * J = [d(I1(x,y))/dx, d(I1(x,y))/dy], 1 x 2
+                         **/
+                        J(0) = img1.at<uchar>(kp.pt.y, kp.pt.x+1) - img1.at<uchar>(kp.pt.y, kp.pt.x); //and then divided by 1?
+                        J(1) = img1.at<uchar>(kp.pt.y+1, kp.pt.x) - img1.at<uchar>(kp.pt.y, kp.pt.x);
                     }
 
                     // compute H, b and set cost;
-                    H;
-                    b;
-                    cost;
+                    /**
+                     * J is a 1 x 2 row vector
+                     * H is a 2 x 2 matrix
+                     * b is a 1 x 2 row vector
+                     *
+                     * in forward method:
+                     * H is J^T * J
+                     * b is (I1(x, y) - I2(x,y))*J
+                     *
+                     * in inverse method:
+                     * H is J^T * J
+                     * b is -I1(x, y) * I2(x, y) * J
+                     **/
+                    H += J * J.transpose();
+                    if(inverse == false){
+                        b += (img1.at<uchar>(kp.pt.y, kp.pt.x) - img2.at<uchar>(kp.pt.y+dy, kp.pt.x+dx)) * J;
+                    }else{
+                        /**
+                         * it should be b -= ... here and (dx, dy) -= update,
+                         * but two negatives make a positive,
+                         * so it becomes b += ... and (dx, dy) += update
+                         **/
+                        b += (img1.at<uchar>(kp.pt.y, kp.pt.x) - img2.at<uchar>(kp.pt.y+dy, kp.pt.x+dx)) * J;
+                    }
+                    cost = pow(img1.at<uchar>(kp.pt.y, kp.pt.x) - img2.at<uchar>(kp.pt.y+dy, kp.pt.x+dx), 2);
                     // TODO END YOUR CODE HERE
                 }
 
             // compute update
             // TODO START YOUR CODE HERE (~1 lines)
             Eigen::Vector2d update;
+            update = H.ldlt().solve(b);
             // TODO END YOUR CODE HERE
 
             if (isnan(update[0])) {
@@ -227,6 +271,12 @@ void OpticalFlowSingleLevel(
             kp2.push_back(tracked);
         }
     }
+
+    int success_count = 0;
+    for(int i = 0; i < success.size(); ++i){
+        if(success[i]) success_count++;
+    }
+    cout << success_count << "/" << success.size() << endl;
 }
 
 void OpticalFlowMultiLevel(
@@ -244,14 +294,47 @@ void OpticalFlowMultiLevel(
 
     // create pyramids
     vector<Mat> pyr1, pyr2; // image pyramids
+    vector<vector<KeyPoint>> kp1_pyr;
     // TODO START YOUR CODE HERE (~8 lines)
     for (int i = 0; i < pyramids; i++) {
+        cv::Mat img1_resized, img2_resized;
+        cv::resize(img1, img1_resized, cv::Size(img1.cols * scales[i], img1.rows * scales[i]));
+        cv::resize(img2, img2_resized, cv::Size(img2.cols * scales[i], img2.rows * scales[i]));
+        pyr1.push_back(img1_resized);
+        pyr2.push_back(img2_resized);
 
+        vector<KeyPoint> kp1_resized = kp1;
+        for(KeyPoint& kp : kp1_resized){
+            kp.pt.x *= scales[i];
+            kp.pt.y *= scales[i];
+        }
+        kp1_pyr.push_back(kp1_resized);
     }
     // TODO END YOUR CODE HERE
 
     // coarse-to-fine LK tracking in pyramids
     // TODO START YOUR CODE HERE
+    vector<KeyPoint> kp2_single;
+    vector<bool> success_single;
+    for (int i = pyramids-1; i >= 0; i--) {
+        // enlarge the keypoints
+        for(KeyPoint& kp : kp2_single){
+            kp.pt.x /= pyramid_scale;
+            kp.pt.y /= pyramid_scale;
+        }
+        success_single.clear();
+        OpticalFlowSingleLevel(pyr1[i], pyr2[i], kp1_pyr[i], kp2_single, success_single, inverse);
+        //update "success" vector
+        if(success.empty()){
+            success = success_single;
+        }else{
+            int success_count = 0;
+            for(int i = 0; i < success.size(); ++i){
+                success[i] = success[i] & success_single[i];
+            }
+        }
+    }
+    kp2 = kp2_single;
 
     // TODO END YOUR CODE HERE
     // don't forget to set the results into kp2
