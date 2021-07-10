@@ -100,8 +100,8 @@ int main(int argc, char **argv) {
 
     for (int i = 1; i < 6; i++) {  // 1~10
         cv::Mat img = cv::imread((fmt_others % i).str(), 0);
-        DirectPoseEstimationSingleLayer(left_img, img, pixels_ref, depth_ref, T_cur_ref, i);    // first you need to test single layer
-        // DirectPoseEstimationMultiLayer(left_img, img, pixels_ref, depth_ref, T_cur_ref);
+        // DirectPoseEstimationSingleLayer(left_img, img, pixels_ref, depth_ref, T_cur_ref, i);    // first you need to test single layer
+        DirectPoseEstimationMultiLayer(left_img, img, pixels_ref, depth_ref, T_cur_ref);
     }
 }
 
@@ -129,6 +129,7 @@ void DirectPoseEstimationSingleLayer(
         // Define Hessian and bias
         Matrix6d H = Matrix6d::Zero();  // 6x6 Hessian
         Vector6d b = Vector6d::Zero();  // 6x1 bias
+        cost = 0;
 
         for (size_t i = 0; i < px_ref.size(); i++) {
 
@@ -141,12 +142,14 @@ void DirectPoseEstimationSingleLayer(
             // 3d point in second camera coordinate
             Eigen::Vector3d P2 = T21 * Eigen::Vector3d(X1, Y1, Z1);
             double X2 = P2[0], Y2 = P2[1], Z2 = P2[2];
+            if (Z2 < 0)   // depth invalid
+                continue;
             double Z22 = Z2 * Z2;
             // projection in the second image
-            float u = fx*P2[0]/P2[2]+cx, v = fy*P2[1]/P2[2]+cy;
+            float u = fx*X2/Z2+cx, v = fy*Y2/Z2+cy;
             if(u-half_patch_size < 0 || u+half_patch_size-1 >= img2.cols ||
                v-half_patch_size < 0 || v+half_patch_size-1 >= img2.rows){
-                break;
+                continue;
             }
             nGood++;
             goodProjection.push_back(Eigen::Vector2d(u, v));
@@ -154,12 +157,14 @@ void DirectPoseEstimationSingleLayer(
             // and compute error and jacobian
             for (int x = -half_patch_size; x < half_patch_size; x++)
                 for (int y = -half_patch_size; y < half_patch_size; y++) {
-                    double error = img1.at<uchar>(px_ref[i][1], px_ref[i][0]) - img2.at<uchar>(v+y, u+x);
-
+                    double error = GetPixelValue(img1, px_ref[i][0]+x, px_ref[i][1]+y) - 
+                                   GetPixelValue(img2, u+x, v+y);
                     Matrix26d J_pixel_xi;   // pixel to \xi in Lie algebra
                     Eigen::Vector2d J_img_pixel;    // image gradients
-                    J_img_pixel(0) = img2.at<uchar>(v+y, u+x+1) - img2.at<uchar>(v+y, u+x);
-                    J_img_pixel(1) = img2.at<uchar>(v+y+1, u+x) - img2.at<uchar>(v+y, u+x);
+                    J_img_pixel(0) = GetPixelValue(img2, u+x+1, v+y) - GetPixelValue(img2, u+x, v+y);
+                    J_img_pixel(1) = GetPixelValue(img2, u+x, v+y+1) - GetPixelValue(img2, u+x, v+y);
+                    // J_img_pixel(0) = 0.5 * (GetPixelValue(img2, u+x+1, v+y) - GetPixelValue(img2, u+x-1, v+y));
+                    // J_img_pixel(1) = 0.5 * (GetPixelValue(img2, u+x, v+y+1) - GetPixelValue(img2, u+x, v+y-1));
 
                     // 一個窗口內的所有像素共用深度?
                     /**
@@ -176,12 +181,13 @@ void DirectPoseEstimationSingleLayer(
                     J_pixel_xi(1, 1) = fy/Z2;
                     J_pixel_xi(1, 2) = -fy*Y2/Z22;
                     J_pixel_xi(1, 3) = -fy-fy*Y2*Y2/Z22;
-                    J_pixel_xi(1, 4) = fx*X2*Y2/Z22;
+                    J_pixel_xi(1, 4) = fy*X2*Y2/Z22;
                     J_pixel_xi(1, 5) = fy*X2/Z2;
 
                     // total jacobian
                     Vector6d J = Vector6d::Zero();
-                    J = - J_img_pixel.transpose() * J_pixel_xi;
+                    // J = - J_img_pixel.transpose() * J_pixel_xi;
+                    J = - (J_img_pixel.transpose() * J_pixel_xi).transpose();
 
                     H += J * J.transpose();
                     b += -error * J;
@@ -229,7 +235,20 @@ void DirectPoseEstimationSingleLayer(
     // cv::imwrite("direct_ref.png", img1_show);
     // boost::format fmt_others("direct_%06d.png");
     // cv::imwrite((fmt_others % img_idx).str(), img2_show);
-    cv::imshow("reference", img1_show);
+    // cv::imshow("reference", img1_show);
+
+    // plot the projected pixels here
+    cv::cvtColor(img2, img2_show, cv::COLOR_GRAY2BGR);
+    for (size_t i = 0; i < px_ref.size(); ++i) {
+        auto p_ref = px_ref[i];
+        auto p_cur = goodProjection[i];
+        if (p_cur[0] > 0 && p_cur[1] > 0) {
+            cv::circle(img2_show, cv::Point2f(p_cur[0], p_cur[1]), 2, cv::Scalar(0, 250, 0), 2);
+            cv::line(img2_show, cv::Point2f(p_ref[0], p_ref[1]), cv::Point2f(p_cur[0], p_cur[1]),
+                     cv::Scalar(0, 250, 0));
+        }
+    }
+
     cv::imshow("current", img2_show);
     cv::waitKey();
 }
