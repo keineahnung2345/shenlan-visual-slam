@@ -58,6 +58,8 @@ void OpticalFlowMultiLevel(
  * @return
  */
 inline float GetPixelValue(const cv::Mat &img, float x, float y) {
+    // return img.at<uchar>(y, x);
+    // interpolation gives better result
     uchar *data = &img.data[int(y) * img.step + int(x)];
     float xx = x - floor(x);
     float yy = y - floor(y);
@@ -188,16 +190,19 @@ void OpticalFlowSingleLevel(
 
                     // TODO START YOUR CODE HERE (~8 lines)
                     // (+x,+y): move from the patch's center to the specific point on a patch
-                    double error = img1.at<uchar>(kp.pt.y+y, kp.pt.x+x) - 
-                        img2.at<uchar>(kp.pt.y+dy+y, kp.pt.x+dx+x);
+                    double error = GetPixelValue(img1, kp.pt.x+x, kp.pt.y+y) -
+                        GetPixelValue(img2, kp.pt.x+dx+x, kp.pt.y+dy+y);
                     Eigen::Vector2d J;  // Jacobian
                     if (inverse == false) {
                         // Forward Jacobian
                         /**
                          * J = [d(I2(x,y))/dx, d(I2(x,y))/dy]
                          **/
-                        J(0) = img2.at<uchar>(kp.pt.y+dy+y, kp.pt.x+dx+x+1) - img2.at<uchar>(kp.pt.y+dy+y, kp.pt.x+dx+x); //and then divided by 1?
-                        J(1) = img2.at<uchar>(kp.pt.y+dy+y+1, kp.pt.x+dx+x) - img2.at<uchar>(kp.pt.y+dy+y, kp.pt.x+dx+x);
+                        // J(0) = (GetPixelValue(img2, kp.pt.x+dx+x+1, kp.pt.y+dy+y) - GetPixelValue(img2, kp.pt.x+dx+x, kp.pt.y+dy+y)); //and then divided by 1?
+                        // J(1) = (GetPixelValue(img2, kp.pt.x+dx+x, kp.pt.y+dy+y+1) - GetPixelValue(img2, kp.pt.x+dx+x, kp.pt.y+dy+y));
+                        // compute Jacobian with 3 neighboring pixels gives better result
+                        J(0) = 0.5 * (GetPixelValue(img2, kp.pt.x+dx+x+1, kp.pt.y+dy+y) - GetPixelValue(img2, kp.pt.x+dx+x-1, kp.pt.y+dy+y));
+                        J(1) = 0.5 * (GetPixelValue(img2, kp.pt.x+dx+x, kp.pt.y+dy+y+1) - GetPixelValue(img2, kp.pt.x+dx+x, kp.pt.y+dy+y-1));
                     } else {
                         // Inverse Jacobian
                         // NOTE this J does not change when dx, dy is updated, so we can store it and only compute error
@@ -205,8 +210,10 @@ void OpticalFlowSingleLevel(
                          * J is the graident of T = (Tx, Ty)
                          * J = [d(I1(x,y))/dx, d(I1(x,y))/dy], 1 x 2
                          **/
-                        J(0) = img1.at<uchar>(kp.pt.y+y, kp.pt.x+x+1) - img1.at<uchar>(kp.pt.y+y, kp.pt.x+x); //and then divided by 1?
-                        J(1) = img1.at<uchar>(kp.pt.y+y+1, kp.pt.x+x) - img1.at<uchar>(kp.pt.y+y, kp.pt.x+x);
+                        // J(0) = (GetPixelValue(img1, kp.pt.x+dx+x+1, kp.pt.y+dy+y) - GetPixelValue(img1, kp.pt.x+dx+x, kp.pt.y+dy+y)); //and then divided by 1?
+                        // J(1) = (GetPixelValue(img1, kp.pt.x+dx+x, kp.pt.y+dy+y+1) - GetPixelValue(img1, kp.pt.x+dx+x, kp.pt.y+dy+y));
+                        J(0) = 0.5 * (GetPixelValue(img1, kp.pt.x+dx+x+1, kp.pt.y+dy+y) - GetPixelValue(img1, kp.pt.x+dx+x-1, kp.pt.y+dy+y));
+                        J(1) = 0.5 * (GetPixelValue(img1, kp.pt.x+dx+x, kp.pt.y+dy+y+1) - GetPixelValue(img1, kp.pt.x+dx+x, kp.pt.y+dy+y-1));
                     }
 
                     // compute H, b and set cost;
@@ -230,7 +237,7 @@ void OpticalFlowSingleLevel(
                      * but two negatives make a positive,
                      * so it becomes b += ... and (dx, dy) += update
                      **/
-                    b += (img1.at<uchar>(kp.pt.y+y, kp.pt.x+x) - img2.at<uchar>(kp.pt.y+dy+y, kp.pt.x+dx+x)) * J;
+                    b += error * J;
                     cost += error * error;
                     // TODO END YOUR CODE HERE
                 }
