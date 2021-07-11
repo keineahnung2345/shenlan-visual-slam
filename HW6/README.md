@@ -397,10 +397,11 @@ void OpticalFlowMultiLevel(
    以下分别是8 x 8，16 x 16，32 x 32 patch多层光流的结果：
 
    <p float="left">
-     <img src="code\result\J_step_2_GetPixelValue_interpolation\tracked_multi_level.png" width="250" />
-     <img src="code\result\patch_size_16\tracked_multi_level.png" width="250" /> 
-     <img src="code\result\patch_size_32\tracked_multi_level.png" width="250" />
+     <img src="code/result/J_step_2_GetPixelValue_interpolation/tracked_multi_level.png" width="250" />
+     <img src="code/result/patch_size_16/tracked_multi_level.png" width="250" /> 
+     <img src="code/result/patch_size_32/tracked_multi_level.png" width="250" />
    </p>
+   
    
    可以看到随着图像块变大，点从边缘逐渐向内减少，效果则没有明显变化。
    
