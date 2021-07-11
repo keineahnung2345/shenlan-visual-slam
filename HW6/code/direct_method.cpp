@@ -205,7 +205,6 @@ void DirectPoseEstimationSingleLayer(
         // TODO START YOUR CODE HERE
         Vector6d update;
         update = H.ldlt().solve(b);
-        T21 = Sophus::SE3d::exp(update) * T21;
         // END YOUR CODE HERE
 
         cost /= nGood;
@@ -219,6 +218,7 @@ void DirectPoseEstimationSingleLayer(
             cout << "cost increased: " << cost << ", " << lastCost << endl;
             break;
         }
+        T21 = Sophus::SE3d::exp(update) * T21;
         lastCost = cost;
         cout << "cost = " << cost << ", good = " << nGood << endl;
     }
@@ -300,6 +300,7 @@ void DirectPoseEstimationMultiLayer(
 
         // END YOUR CODE HERE
         DirectPoseEstimationSingleLayer(pyr1[level], pyr2[level], px_ref_pyr, depth_ref, T21);
+        // 不需要對T21特別做什麼
     }
 
 }
