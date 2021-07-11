@@ -16,6 +16,22 @@ Groundtruth and esitmated trajectories.
 
 ![trajectory_errors](HW3/trajectory_errors.png)
 
+## HW4
+Undistort:
+
+ <p float="left">
+   <img src="HW4/disparity/test.png" width="400" />
+   <img src="HW4/undistorted_image.png" width="400" /> 
+ </p>
+
+Disparity:
+
+ <p float="left">
+   <img src="HW4/disparity/left.png" width="300" />
+   <img src="HW4/disparity/right.png" width="300" /> 
+   <img src="HW4/disparity_result.png" width="300" /> 
+ </p>
+
 ## HW5
 Feature point: ORB
 
