@@ -120,11 +120,16 @@ void DirectPoseEstimationSingleLayer(
 
     double cost = 0, lastCost = 0;
     int nGood = 0;  // good projections
-    VecVector2d goodProjection;
+    /**
+     * Eigen::Vector2d::Zero() is required,
+     * later we will use
+     * if (p_cur[0] > 0 && p_cur[1] > 0)
+     * to determine if a keypoint should be plotted
+     **/
+    VecVector2d goodProjection(px_ref.size(), Eigen::Vector2d::Zero());
 
     for (int iter = 0; iter < iterations; iter++) {
         nGood = 0;
-        goodProjection.clear();
 
         // Define Hessian and bias
         Matrix6d H = Matrix6d::Zero();  // 6x6 Hessian
@@ -152,7 +157,7 @@ void DirectPoseEstimationSingleLayer(
                 continue;
             }
             nGood++;
-            goodProjection.push_back(Eigen::Vector2d(u, v));
+            goodProjection[i] = Eigen::Vector2d(u, v);
 
             // and compute error and jacobian
             for (int x = -half_patch_size; x < half_patch_size; x++)
