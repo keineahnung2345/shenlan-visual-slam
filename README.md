@@ -15,3 +15,11 @@ Proof of Rodrigues' rotation formula.
 Groundtruth and esitmated trajectories.
 
 ![trajectory_errors](HW3/trajectory_errors.png)
+
+## HW6
+Optical flow
+
+![optical_flow](HW6/code/result/optical_flow/J_step_2_GetPixelValue_interpolation/tracked_multi_level.png)
+
+Direct method
+![direct_method](HW6/code/result/direct_method/multiple_layer/0.png)
