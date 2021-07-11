@@ -166,10 +166,10 @@ void DirectPoseEstimationSingleLayer(
                                    GetPixelValue(img2, u+x, v+y);
                     Matrix26d J_pixel_xi;   // pixel to \xi in Lie algebra
                     Eigen::Vector2d J_img_pixel;    // image gradients
-                    J_img_pixel(0) = GetPixelValue(img2, u+x+1, v+y) - GetPixelValue(img2, u+x, v+y);
-                    J_img_pixel(1) = GetPixelValue(img2, u+x, v+y+1) - GetPixelValue(img2, u+x, v+y);
-                    // J_img_pixel(0) = 0.5 * (GetPixelValue(img2, u+x+1, v+y) - GetPixelValue(img2, u+x-1, v+y));
-                    // J_img_pixel(1) = 0.5 * (GetPixelValue(img2, u+x, v+y+1) - GetPixelValue(img2, u+x, v+y-1));
+                    // J_img_pixel(0) = GetPixelValue(img2, u+x+1, v+y) - GetPixelValue(img2, u+x, v+y);
+                    // J_img_pixel(1) = GetPixelValue(img2, u+x, v+y+1) - GetPixelValue(img2, u+x, v+y);
+                    J_img_pixel(0) = 0.5 * (GetPixelValue(img2, u+x+1, v+y) - GetPixelValue(img2, u+x-1, v+y));
+                    J_img_pixel(1) = 0.5 * (GetPixelValue(img2, u+x, v+y+1) - GetPixelValue(img2, u+x, v+y-1));
 
                     // 一個窗口內的所有像素共用深度?
                     /**
