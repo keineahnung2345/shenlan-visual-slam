@@ -374,15 +374,15 @@ void OpticalFlowMultiLevel(
 
 1. Jacobian使用相邻像素计算
 
-![tracked_multi_level](code\result\optical_flow\J_step_1_GetPixelValue_interpolation\tracked_multi_level.png)
+![tracked_multi_level](code/result/optical_flow/J_step_1_GetPixelValue_interpolation/tracked_multi_level.png)
 
 2. 像素值不内插
 
-![tracked_multi_level](code\result\optical_flow\J_step_2_GetPixelValue_no_interpolation\tracked_multi_level.png)
+![tracked_multi_level](code/result/optical_flow/J_step_2_GetPixelValue_no_interpolation/tracked_multi_level.png)
 
 3. Jacobian使用两侧像素计算，像素值内插
 
-![tracked_multi_level](code\result\optical_flow\J_step_2_GetPixelValue_interpolation\tracked_multi_level.png)
+![tracked_multi_level](code/result/optical_flow/J_step_2_GetPixelValue_interpolation/tracked_multi_level.png)
 
 可见Jacobian的计算方式对追踪结果影响甚大。
 
@@ -419,21 +419,21 @@ void OpticalFlowMultiLevel(
 
    以下分别是1，2，4，6层的结果：
 
-   ![tracked_multi_level](code\result\optical_flow\layer_1\tracked_multi_level.png)
+   ![tracked_multi_level](code/result/optical_flow/layer_1/tracked_multi_level.png)
 
-   ![tracked_multi_level](code\result\optical_flow\layer_2\tracked_multi_level.png)
+   ![tracked_multi_level](code/result/optical_flow/layer_2/tracked_multi_level.png)
 
-   ![tracked_multi_level](code\result\optical_flow\J_step_2_GetPixelValue_interpolation\tracked_multi_level.png)
+   ![tracked_multi_level](code/result/optical_flow/J_step_2_GetPixelValue_interpolation/tracked_multi_level.png)
 
-   ![tracked_multi_level](code\result\optical_flow\layer_6\tracked_multi_level.png)
+   ![tracked_multi_level](code/result/optical_flow/layer_6/tracked_multi_level.png)
 
    以下分别是scale设为0.3，0.5，0.8的结果：
 
-   ![tracked_multi_level](code\result\optical_flow\scale_0.3\tracked_multi_level.png)
+   ![tracked_multi_level](code/result/optical_flow/scale_0.3/tracked_multi_level.png)
 
-   ![tracked_multi_level](code\result\optical_flow\J_step_2_GetPixelValue_interpolation\tracked_multi_level.png)
+   ![tracked_multi_level](code/result/optical_flow/J_step_2_GetPixelValue_interpolation/tracked_multi_level.png)
 
-   ![tracked_multi_level](code\result\optical_flow\scale_0.8\tracked_multi_level.png)
+   ![tracked_multi_level](code/result/optical_flow/scale_0.8/tracked_multi_level.png)
 
 ## 直接法
 
@@ -638,7 +638,7 @@ void DirectPoseEstimationSingleLayer(
 }
 ```
 
-![0](code\result\direct_method\single_layer\0.png)
+![0](code/result/direct_method/single_layer/0.png)
 
 ### 多层直接法
 
@@ -690,13 +690,13 @@ void DirectPoseEstimationMultiLayer(
 }
 ```
 
-![3](code\result\direct_method\multiple_layer\3.png)
+![3](code/result/direct_method/multiple_layer/3.png)
 
-![2](code\result\direct_method\multiple_layer\2.png)
+![2](code/result/direct_method/multiple_layer/2.png)
 
-![1](code\result\direct_method\multiple_layer\1.png)
+![1](code/result/direct_method/multiple_layer/1.png)
 
-![0](code\result\direct_method\multiple_layer\0.png)
+![0](code/result/direct_method/multiple_layer/0.png)
 
 参考答案：图像 000001的位姿平移部分应该接近$t_1 = [0.005876, -0.01024,  -0.725]^T$，图像和 000005的应该接近$t_5 = [0.0394, -0.0592, -3.9907]^T$，误差不大于0.5米。
 
