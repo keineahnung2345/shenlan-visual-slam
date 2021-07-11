@@ -253,9 +253,10 @@ void DirectPoseEstimationSingleLayer(
                      cv::Scalar(0, 250, 0));
         }
     }
-
-    cv::imshow("current", img2_show);
-    cv::waitKey();
+    if(img2.rows == 376){
+        cv::imshow("current", img2_show);
+        cv::waitKey();
+    }
 }
 
 void DirectPoseEstimationMultiLayer(
