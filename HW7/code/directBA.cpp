@@ -89,6 +89,13 @@ public:
     virtual void computeError() override {
         // TODO START YOUR CODE HERE
         // compute projection error ...
+        const g2o::VertexSBAPointXYZ *vertex_point = static_cast<g2o::VertexSBAPointXYZ *> (_vertices[0]);
+        const VertexSophus *vertex_pose = static_cast<VertexSophus *> (_vertices[1]);
+        Sophus::SE3d = vertex_pose->estimate();
+        Eigen::Vector3d p3d = vertex_point->estimate();
+        _error = _measurement - pos_pixel;
+
+        _error = _measurement target.at<uchar>()
         // END YOUR CODE HERE
     }
 
@@ -163,7 +170,24 @@ int main(int argc, char **argv) {
 
     // TODO add vertices, edges into the graph optimizer
     // START YOUR CODE HERE
+    cout << "adding vertex" << endl;
+    vector<g2o::VertexSBAPointXYZ*> vertex_points(points.size());
+    for(size_t i = 0; i < points.size(); ++i){
+        g2o::VertexSBAPointXYZ *vertex_point = new g2o::VertexSBAPointXYZ();
+        vertex_point->setId(i);
+        vertex_point->setEstimate(points[i]);
+        optimizer.addVertex(vertex_point);
+        vertex_points[i] = vertex_point;
+    }
 
+    vector<VertexSophus*> vertex_poses(poses.size());
+    for(size_t i = 0; i < poses.size(); ++i){
+        VertexSophus *vertex_pose = new VertexSophus();
+        vertex_pose->setId(points.size() + i);
+        vertex_pose->setEstimate(poses[i]);
+        optimizer.addVertex(vertex_pose);
+        vertex_poses[i] = vertex_pose;
+    }
     // END YOUR CODE HERE
 
     // perform optimization
@@ -172,6 +196,37 @@ int main(int argc, char **argv) {
 
     // TODO fetch data from the optimizer
     // START YOUR CODE HERE
+    vector<EdgeDirectProjection*> edges();
+    int index = 1;
+    for (size_t j = 0; j < poses.size(); ++j) {
+        for (size_t i = 0; i < points.size(); ++i) {
+            EdgeDirectProjection *edge = new EdgeDirectProjection();
+            // edge->setId(index);
+            // project point i to image j
+            edge->setVertex(0, vertex_points[i]);
+            edge->setVertex(1, vertex_poses[j]);
+            edge->setMeasurement(color[i]);
+            edge->setInformation(Eigen::Matrix16d::Identity());
+            // edge->setParameterId(0, 0);
+            // 核函数
+            edge->setRobustKernel(new g2o::RobustKernelHuber());
+            optimizer.addEdge(edge);
+            edges[i] = edge;
+            index++;
+        }
+    }
+
+    cout << "optimize..." << endl;
+    chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
+    optimizer.setVerbose(true);
+    optimizer.initializeOptimization();
+    optimizer.optimize(10);
+    chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
+    chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
+    cout << "optimization costs time: " << time_used.count() << " seconds." << endl;
+    // for(VertexCamera* vertex_camera : vertex_cameras){
+    //     cout << "pose estimated by g2o =\n" << vertex_camera->estimate().matrix() << endl;
+    // }
     // END YOUR CODE HERE
 
     // plot the optimized points and poses
