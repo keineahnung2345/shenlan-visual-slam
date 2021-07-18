@@ -10,6 +10,7 @@
 #include <g2o/core/block_solver.h>
 #include <g2o/core/solver.h>
 #include <g2o/core/optimization_algorithm_gauss_newton.h>
+#include <g2o/core/optimization_algorithm_levenberg.h>
 #include <g2o/solvers/dense/linear_solver_dense.h>
 #include <g2o/types/sba/types_six_dof_expmap.h> //g2o::CameraParameters
 #include <g2o/core/parameter.h> //g2o::Parameter
@@ -40,24 +41,21 @@ typedef struct {
     Eigen::Vector2d p2d;
 }observation;
 
-typedef struct {
-    Eigen::Vector3d rv; //Rodrigues' vector
-    // Sophus::SO3d R;
+typedef struct camera{
+    Sophus::SO3d R;
     Eigen::Vector3d t;
-    // Sophus::SE3d T;
     double f;
     double k1;
     double k2;
-    Sophus::SE3d s = Sophus::SE3d();
 
-    Sophus::SE3d T() const{
-        Eigen::AngleAxisd aa(rv.norm(), rv/rv.norm());
-        Eigen::Quaterniond q(aa);
-        // R = Sophus::SO3d(q);
-        return Sophus::SE3d(q, t);
+    camera() {
+        t = Eigen::Vector3d::Zero();
+        f = 0;
+        k1 = 0;
+        k2 = 0;
     };
 
-    Eigen::Vector2d proj(const Sophus::SE3d& T, const Eigen::Vector3d& p3d) const{
+    Eigen::Vector2d proj(const Eigen::Vector3d& p3d) const{
         /**
          * https://grail.cs.washington.edu/projects/bal/
          * P  =  R * X + t       (conversion from world to camera coordinates)
@@ -65,7 +63,7 @@ typedef struct {
          * p' =  f * r(p) * p    (conversion to pixel coordinates)
          * r(p) = 1.0 + k1 * ||p||^2 + k2 * ||p||^4.
          **/
-        Eigen::Vector3d cam_p3d = T * p3d;
+        Eigen::Vector3d cam_p3d = R * p3d + t;
         cam_p3d /= cam_p3d(2);
         cam_p3d *= -1; // BAL coordinate system
         Eigen::Vector2d p2d = cam_p3d.head(2);
@@ -109,11 +107,13 @@ int main(int argc, char **argv) {
             line_id++;
         }else if(line_id >= num_obvs+1 && line_id <= num_obvs+num_cams*9){
             camera cam;
-            iss >> cam.rv(0);
+            Eigen::Vector3d rv;
+            iss >> rv(0);
             std::getline(infile, line, '\n'); iss = std::istringstream(line);
-            iss >> cam.rv(1);
+            iss >> rv(1);
             std::getline(infile, line, '\n'); iss = std::istringstream(line);
-            iss >> cam.rv(2);
+            iss >> rv(2);
+            cam.R = Sophus::SO3d::exp(Eigen::Vector3d(rv));
             std::getline(infile, line, '\n'); iss = std::istringstream(line);
             iss >> cam.t(0);
             std::getline(infile, line, '\n'); iss = std::istringstream(line);
@@ -169,34 +169,32 @@ Point2d pixel2cam(const Point2d &p, const Mat &K) {
 }
 
 /// vertex and edges used in g2o ba
-// 轉換矩陣有6個自由度,用SE3d儲存
-class VertexPose : public g2o::BaseVertex<6, Sophus::SE3d> {
+// 9個自由度,用camera儲存
+class VertexCamera : public g2o::BaseVertex<9, camera> {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 
     virtual void setToOriginImpl() override {
         // cout << "pose setToOriginImpl" << endl;
-        _estimate = Sophus::SE3d();
+        _estimate = camera();
     }
 
     /// left multiplication on SE3
     virtual void oplusImpl(const double *update) override {
         // cout << "pose oplusImpl" << endl;
         // 擾動模型:求解李代數小量se(3),然後將它轉成李群表示,之後左乘到估計的pose上
-        Eigen::Matrix<double, 6, 1> update_eigen;
-        update_eigen << update[0], update[1], update[2], update[3], update[4], update[5];
-        _estimate = Sophus::SE3d::exp(update_eigen) * _estimate;
+        Sophus::SO3d update_R = Sophus::SO3d::exp(Eigen::Vector3d(update[0], update[1], update[2]));
+        Eigen::Vector3d update_t = Eigen::Vector3d(update[3], update[4], update[5]);
+        _estimate.R = update_R * _estimate.R;
+        _estimate.t += update_t;
+        _estimate.f += update[6];
+        _estimate.k1 += update[7];
+        _estimate.k2 += update[8];
     }
 
     virtual bool read(istream &in) override {}
 
     virtual bool write(ostream &out) const override {}
-
-    void setIntrinsicParameters(const camera& cam) {
-        this->cam = cam;
-    }
-
-    camera cam;
 };
 
 class VertexLandmark : public g2o::BaseVertex<3, Eigen::Vector3d> {
@@ -222,76 +220,23 @@ public:
     virtual bool write(ostream &out) const override {}
 };
 
-class DistortedCameraParameters : public g2o::Parameter {
-public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
- 
-    double focal_length;
-    Eigen::Vector2d principle_point;
-    double k1, k2; //radial distortion
-
-    DistortedCameraParameters (double focal_length, const Eigen::Vector2d &principle_point, double k1, double k2) {
-        this->focal_length = focal_length;
-        this->principle_point = principle_point;
-        this->k1 = k1;
-        this->k2 = k2;
-    }
-
-    Eigen::Vector2d cam_map(const Eigen::Vector3d &trans_xyz) const {
-        Eigen::Vector2d proj = g2o::project(trans_xyz);
-        double r2 = proj.norm() * proj.norm();
-        double r4 = r2 * r2;
-        proj(0) *= (1 + k1 * r2 + k2 * r4);
-        proj(1) *= (1 + k1 * r2 + k2 * r4);
-        Eigen::Vector2d res;
-        res[0] = proj[0]*focal_length + principle_point[0];
-        res[1] = proj[1]*focal_length + principle_point[1];
-        return res;
-    }
-
-    virtual bool read(istream &in) override {}
-
-    virtual bool write(ostream &out) const override {}
-};
-
 // <函數輸出值(觀測值)的個數,函數輸出值(觀測值)的類型,待估計變量(頂點)的類型>
-class EdgeProjection : public g2o::BaseBinaryEdge<2, Eigen::Vector2d, VertexPose, VertexLandmark> {
+class EdgeProjection : public g2o::BaseBinaryEdge<2, Eigen::Vector2d, VertexCamera, VertexLandmark> {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 
     EdgeProjection() {}
 
     virtual void computeError() override {
-        cout << "computeError" << endl;
-        const VertexPose *vp = static_cast<VertexPose *> (_vertices[0]);
+        // cout << "computeError" << endl;
+        const VertexCamera *vc = static_cast<VertexCamera *> (_vertices[0]);
         const VertexLandmark *vl = static_cast<VertexLandmark *> (_vertices[1]);
-        Sophus::SE3d T = vp->estimate();
+        camera cam = vc->estimate();
         Eigen::Vector3d p3d = vl->estimate();
-        Eigen::Vector2d pos_pixel = vp->cam.proj(T, p3d);
+        Eigen::Vector2d pos_pixel = cam.proj(p3d);
         _error = _measurement - pos_pixel;
-        cout << "computeError end" << endl;
+        // cout << "computeError end" << endl;
     }
-
-    // virtual void linearizeOplus() override {
-    //     const VertexPose *vp = static_cast<VertexPose *> (_vertices[0]);
-    //     const VertexLandmark *vl = static_cast<VertexLandmark *> (_vertices[1]);
-    //     // 估計出來的旋轉矩陣,即李群SE(3)
-    //     camera cam = vp->cam;
-    //     Sophus::SE3d T = vp->estimate();
-    //     Eigen::Vector3d p3d = vl->estimate();
-    //     Eigen::Vector3d pos_cam = T * p3d;
-    //     double fx = cam.f;
-    //     double fy = cam.f;
-    //     double cx = 0;
-    //     double cy = 0;
-    //     double X = pos_cam[0];
-    //     double Y = pos_cam[1];
-    //     double Z = pos_cam[2];
-    //     double Z2 = Z * Z;
-    //     _jacobianOplusXi
-    //         << -fx / Z, 0, fx * X / Z2, fx * X * Y / Z2, -fx - fx * X * X / Z2, fx * Y / Z,
-    //         0, -fy / Z, fy * Y / (Z * Z), fy + fy * Y * Y / Z2, -fy * X * Y / Z2, -fy * X / Z;
-    // }
 
     virtual bool read(istream &in) override {}
 
@@ -310,10 +255,14 @@ void bundleAdjustmentG2O(
     cout << "obvs: " << obvs.size() << endl;
 
     // 构建图优化，先设定g2o
-    typedef g2o::BlockSolver<g2o::BlockSolverTraits<6, 3>> BlockSolverType;    // pose is 6, landmark is 3
+    typedef g2o::BlockSolver<g2o::BlockSolverTraits<9, 3>> BlockSolverType;    // camera is 9, landmark is 3
     typedef g2o::LinearSolverDense<BlockSolverType::PoseMatrixType> LinearSolverType; // 线性求解器类型
     // 梯度下降方法，可以从GN, LM, DogLeg 中选
-    auto solver = new g2o::OptimizationAlgorithmGaussNewton(
+    /**
+     * use g2o::OptimizationAlgorithmGaussNewton will lead to divergence
+     * use g2o::OptimizationAlgorithmLevenberg will lead to convergence
+     **/
+    auto solver = new g2o::OptimizationAlgorithmLevenberg(
         g2o::make_unique<BlockSolverType>(g2o::make_unique<LinearSolverType>()));
     g2o::SparseOptimizer optimizer;         // 图模型
     optimizer.setAlgorithm(solver);     // 设置求解器
@@ -321,14 +270,13 @@ void bundleAdjustmentG2O(
 
     // vertex
     cout << "adding cam vertex" << endl;
-    vector<VertexPose*> vertex_poses(cams.size());
+    vector<VertexCamera*> vertex_cameras(cams.size());
     for(size_t i = 0; i < cams.size(); ++i){
-        VertexPose *vertex_pose = new VertexPose(); // camera vertex_pose
-        vertex_pose->setId(i);
-        vertex_pose->setEstimate(cams[i].T());
-        vertex_pose->setIntrinsicParameters(cams[i]);
-        optimizer.addVertex(vertex_pose);
-        vertex_poses[i] = vertex_pose;
+        VertexCamera *vertex_camera = new VertexCamera(); // camera vertex_camera
+        vertex_camera->setId(i);
+        vertex_camera->setEstimate(cams[i]);
+        optimizer.addVertex(vertex_camera);
+        vertex_cameras[i] = vertex_camera;
     }
 
     cout << "adding point vertex" << endl;
@@ -337,6 +285,13 @@ void bundleAdjustmentG2O(
         VertexLandmark *vertex_landmark = new VertexLandmark();
         vertex_landmark->setId(cams.size() + i);
         vertex_landmark->setEstimate(points[i]);
+        /**
+         * this solves:
+         * terminate called after throwing an instance of 'std::bad_alloc'
+         * what():  std::bad_alloc
+         * Aborted (core dumped)
+         **/
+        vertex_landmark->setMarginalized(true);
         optimizer.addVertex(vertex_landmark);
         vertex_landmarks[i] = vertex_landmark;
     }
@@ -355,9 +310,7 @@ void bundleAdjustmentG2O(
     for (size_t i = 0; i < obvs.size(); ++i) {
         EdgeProjection *edge = new EdgeProjection();
         // edge->setId(index);
-        // edge->setVertex(0, dynamic_cast<VertexPose*>(optimizer.vertex(obvs[i].cam_id)));
-        // edge->setVertex(1, dynamic_cast<VertexLandmark*>(optimizer.vertex(cams.size() + obvs[i].point_id)));
-        edge->setVertex(0, vertex_poses[obvs[i].cam_id]);
+        edge->setVertex(0, vertex_cameras[obvs[i].cam_id]);
         edge->setVertex(1, vertex_landmarks[obvs[i].point_id]);
         edge->setMeasurement(obvs[i].p2d);
         edge->setInformation(Eigen::Matrix2d::Identity());
@@ -373,11 +326,11 @@ void bundleAdjustmentG2O(
     chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
     optimizer.setVerbose(true);
     optimizer.initializeOptimization();
-    optimizer.optimize(1);
+    optimizer.optimize(10);
     chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
     chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
     cout << "optimization costs time: " << time_used.count() << " seconds." << endl;
-    // for(VertexPose* vertex_pose : vertex_poses){
-    //     cout << "pose estimated by g2o =\n" << vertex_pose->estimate().matrix() << endl;
+    // for(VertexCamera* vertex_camera : vertex_cameras){
+    //     cout << "pose estimated by g2o =\n" << vertex_camera->estimate().matrix() << endl;
     // }
 }
