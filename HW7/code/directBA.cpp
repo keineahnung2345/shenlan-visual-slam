@@ -15,15 +15,17 @@ using namespace std;
 #include <g2o/core/robust_kernel.h>
 #include <g2o/core/robust_kernel_impl.h>
 #include <g2o/types/sba/types_six_dof_expmap.h>
+#include <g2o/types/slam3d/vertex_pointxyz.h> // g2o::VertexPointXYZ
 
 #include <Eigen/Core>
-#include <sophus/se3.h>
+// include before sophus to avoid fmt problem
+#include <pangolin/pangolin.h>
+#include <sophus/se3.hpp>
 #include <opencv2/opencv.hpp>
 
-#include <pangolin/pangolin.h>
 #include <boost/format.hpp>
 
-typedef vector<Sophus::SE3, Eigen::aligned_allocator<Sophus::SE3>> VecSE3;
+typedef vector<Sophus::SE3d, Eigen::aligned_allocator<Sophus::SE3d>> VecSE3d;
 typedef vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>> VecVec3d;
 
 // global variables
@@ -38,6 +40,10 @@ float cy = 239.777;
 
 // bilinear interpolation
 inline float GetPixelValue(const cv::Mat &img, float x, float y) {
+    if(x < 0) x = 0;
+    if(x > img.cols-1) x = img.cols-1;
+    if(y < 0) y = 0;
+    if(y > img.rows-1) y = img.rows-1;
     uchar *data = &img.data[int(y) * img.step + int(x)];
     float xx = x - floor(x);
     float yy = y - floor(y);
@@ -49,8 +55,8 @@ inline float GetPixelValue(const cv::Mat &img, float x, float y) {
     );
 }
 
-// g2o vertex that use sophus::SE3 as pose
-class VertexSophus : public g2o::BaseVertex<6, Sophus::SE3> {
+// g2o vertex that use sophus::SE3d as pose
+class VertexSophus : public g2o::BaseVertex<6, Sophus::SE3d> {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
@@ -63,19 +69,23 @@ public:
     bool write(std::ostream &os) const {}
 
     virtual void setToOriginImpl() {
-        _estimate = Sophus::SE3();
+        _estimate = Sophus::SE3d();
     }
 
     virtual void oplusImpl(const double *update_) {
         Eigen::Map<const Eigen::Matrix<double, 6, 1>> update(update_);
-        setEstimate(Sophus::SE3::exp(update) * estimate());
+        setEstimate(Sophus::SE3d::exp(update) * estimate());
     }
 };
 
 // TODO edge of projection error, implement it
 // 16x1 error, which is the errors in patch
 typedef Eigen::Matrix<double,16,1> Vector16d;
-class EdgeDirectProjection : public g2o::BaseBinaryEdge<16, Vector16d, g2o::VertexSBAPointXYZ, VertexSophus> {
+/**
+ * g2o issue 674
+ * g2o::VertexSBAPointXYZ -> g2o::VertexPointXYZ
+ **/
+class EdgeDirectProjection : public g2o::BaseBinaryEdge<16, Vector16d, g2o::VertexPointXYZ, VertexSophus> {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 
@@ -89,13 +99,20 @@ public:
     virtual void computeError() override {
         // TODO START YOUR CODE HERE
         // compute projection error ...
-        const g2o::VertexSBAPointXYZ *vertex_point = static_cast<g2o::VertexSBAPointXYZ *> (_vertices[0]);
+        const g2o::VertexPointXYZ *vertex_point = static_cast<g2o::VertexPointXYZ *> (_vertices[0]);
         const VertexSophus *vertex_pose = static_cast<VertexSophus *> (_vertices[1]);
-        Sophus::SE3d = vertex_pose->estimate();
+        Sophus::SE3d T = vertex_pose->estimate();
         Eigen::Vector3d p3d = vertex_point->estimate();
-        _error = _measurement - pos_pixel;
-
-        _error = _measurement target.at<uchar>()
+        Eigen::Vector3d cam_p3d = T * p3d;
+        Eigen::Vector2d cam_p2d((fx * cam_p3d(0)+cx)/cam_p3d[2], (fy * cam_p3d(1)+cy)/cam_p3d[2]);
+        Vector16d proj_colors;
+        int idx = 0;
+        for(int y = cam_p2d(0)-2; y <= cam_p2d(0)+1; ++y){
+            for(int x = cam_p2d(1)-2; x <= cam_p2d(1)+1; ++x){
+                proj_colors[idx++] = GetPixelValue(targetImg, x, y);
+            }
+        }
+        _error = _measurement - proj_colors;
         // END YOUR CODE HERE
     }
 
@@ -111,12 +128,12 @@ private:
 };
 
 // plot the poses and points for you, need pangolin
-void Draw(const VecSE3 &poses, const VecVec3d &points);
+void Draw(const VecSE3d &poses, const VecVec3d &points);
 
 int main(int argc, char **argv) {
 
     // read poses and points
-    VecSE3 poses;
+    VecSE3d poses;
     VecVec3d points;
     ifstream fin(pose_file);
 
@@ -126,7 +143,7 @@ int main(int argc, char **argv) {
         if (timestamp == 0) break;
         double data[7];
         for (auto &d: data) fin >> d;
-        poses.push_back(Sophus::SE3(
+        poses.push_back(Sophus::SE3d(
                 Eigen::Quaterniond(data[6], data[3], data[4], data[5]),
                 Eigen::Vector3d(data[0], data[1], data[2])
         ));
@@ -150,20 +167,23 @@ int main(int argc, char **argv) {
     }
     fin.close();
 
-    cout << "poses: " << poses.size() << ", points: " << points.size() << endl;
+    std::cout << "poses: " << poses.size() << ", points: " << points.size() << endl;
 
     // read images
     vector<cv::Mat> images;
-    boost::format fmt("./%d.png");
+    boost::format img_fmt("./%d.png");
     for (int i = 0; i < 7; i++) {
-        images.push_back(cv::imread((fmt % i).str(), 0));
+        images.push_back(cv::imread((img_fmt % i).str(), 0));
     }
 
     // build optimization problem
     typedef g2o::BlockSolver<g2o::BlockSolverTraits<6, 3>> DirectBlock;  // 求解的向量是6＊1的
-    DirectBlock::LinearSolverType *linearSolver = new g2o::LinearSolverDense<DirectBlock::PoseMatrixType>();
-    DirectBlock *solver_ptr = new DirectBlock(linearSolver);
-    g2o::OptimizationAlgorithmLevenberg *solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr); // L-M
+    // DirectBlock::LinearSolverType *linearSolver = new g2o::LinearSolverDense<DirectBlock::PoseMatrixType>();
+    typedef g2o::LinearSolverDense<DirectBlock::PoseMatrixType> LinearSolverType;
+    // DirectBlock *solver_ptr = new DirectBlock(linearSolver);
+    // g2o::OptimizationAlgorithmLevenberg *solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr); // L-M
+    g2o::OptimizationAlgorithmLevenberg *solver = new g2o::OptimizationAlgorithmLevenberg(
+        g2o::make_unique<DirectBlock>(g2o::make_unique<LinearSolverType>()));
     g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(solver);
     optimizer.setVerbose(true);
@@ -171,11 +191,12 @@ int main(int argc, char **argv) {
     // TODO add vertices, edges into the graph optimizer
     // START YOUR CODE HERE
     cout << "adding vertex" << endl;
-    vector<g2o::VertexSBAPointXYZ*> vertex_points(points.size());
+    vector<g2o::VertexPointXYZ*> vertex_points(points.size());
     for(size_t i = 0; i < points.size(); ++i){
-        g2o::VertexSBAPointXYZ *vertex_point = new g2o::VertexSBAPointXYZ();
+        g2o::VertexPointXYZ *vertex_point = new g2o::VertexPointXYZ();
         vertex_point->setId(i);
         vertex_point->setEstimate(points[i]);
+        vertex_point->setMarginalized(true);
         optimizer.addVertex(vertex_point);
         vertex_points[i] = vertex_point;
     }
@@ -188,45 +209,50 @@ int main(int argc, char **argv) {
         optimizer.addVertex(vertex_pose);
         vertex_poses[i] = vertex_pose;
     }
-    // END YOUR CODE HERE
 
-    // perform optimization
-    optimizer.initializeOptimization(0);
-    optimizer.optimize(200);
-
-    // TODO fetch data from the optimizer
-    // START YOUR CODE HERE
-    vector<EdgeDirectProjection*> edges();
+    vector<EdgeDirectProjection*> edges(poses.size() * points.size());
     int index = 1;
     for (size_t j = 0; j < poses.size(); ++j) {
         for (size_t i = 0; i < points.size(); ++i) {
-            EdgeDirectProjection *edge = new EdgeDirectProjection();
+            EdgeDirectProjection *edge = new EdgeDirectProjection(color[i], images[j]);
             // edge->setId(index);
             // project point i to image j
             edge->setVertex(0, vertex_points[i]);
             edge->setVertex(1, vertex_poses[j]);
-            edge->setMeasurement(color[i]);
-            edge->setInformation(Eigen::Matrix16d::Identity());
+            Vector16d gt;
+            for(size_t k = 0; k < 16; ++k) gt << (double)color[i][k];
+            edge->setMeasurement(gt);
+            edge->setInformation(Eigen::Matrix<double,16,16>::Identity());
             // edge->setParameterId(0, 0);
             // 核函数
             edge->setRobustKernel(new g2o::RobustKernelHuber());
             optimizer.addEdge(edge);
-            edges[i] = edge;
+            edges[j * points.size() + i] = edge;
             index++;
         }
     }
+    // END YOUR CODE HERE
 
+    // perform optimization
     cout << "optimize..." << endl;
     chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
     optimizer.setVerbose(true);
-    optimizer.initializeOptimization();
-    optimizer.optimize(10);
+    optimizer.initializeOptimization(0);
+    optimizer.optimize(200);
     chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
     chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
     cout << "optimization costs time: " << time_used.count() << " seconds." << endl;
-    // for(VertexCamera* vertex_camera : vertex_cameras){
-    //     cout << "pose estimated by g2o =\n" << vertex_camera->estimate().matrix() << endl;
-    // }
+
+    // TODO fetch data from the optimizer
+    // START YOUR CODE HERE
+    for(size_t i = 0; i < vertex_poses.size(); ++i){
+        // cout << "pose estimated by g2o =\n" << vertex_pose->estimate().matrix() << endl;
+        poses[i] = vertex_poses[i]->estimate();
+    }
+    for(size_t i = 0; i < vertex_points.size(); ++i){
+        // cout << "pose estimated by g2o =\n" << vertex_points[i]->estimate() << endl;
+        points[i] = vertex_points[i]->estimate();
+    }
     // END YOUR CODE HERE
 
     // plot the optimized points and poses
@@ -237,7 +263,7 @@ int main(int argc, char **argv) {
     return 0;
 }
 
-void Draw(const VecSE3 &poses, const VecVec3d &points) {
+void Draw(const VecSE3d &poses, const VecVec3d &points) {
     if (poses.empty() || points.empty()) {
         cerr << "parameter is empty!" << endl;
         return;

@@ -12,6 +12,7 @@ find_package(OpenCV REQUIRED)
 set(G2O_DIR "/usr/local/include")
 find_package(G2O REQUIRED)
 find_package(Sophus REQUIRED)
+find_package(Pangolin REQUIRED)
 
 include_directories(
         ${OpenCV_INCLUDE_DIRS}
@@ -23,4 +24,10 @@ include_directories(
 add_executable(BA BA.cpp)
 target_link_libraries(BA
         g2o_core g2o_stuff g2o_types_sba
+        ${OpenCV_LIBS} fmt::fmt)
+
+add_executable(directBA directBA.cpp)
+target_link_libraries(directBA
+        g2o_core g2o_stuff g2o_types_sba g2o_types_slam3d
+        ${Pangolin_LIBRARIES}
         ${OpenCV_LIBS} fmt::fmt)
