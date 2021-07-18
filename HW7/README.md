@@ -383,6 +383,39 @@ void bundleAdjustmentG2O(
 
 3. 优化方式使用`g2o::OptimizationAlgorithmGaussNewton`会发散，改用`g2o::OptimizationAlgorithmLevenberg`才会收敛。
 
+运行log：
+
+```
+0: 0
+cam: 92
+point: 61202
+cams: 93
+points: 61203
+obvs: 287451
+calling bundle adjustment by g2o
+cams: 93
+points: 61203
+obvs: 287451
+adding cam vertex
+adding point vertex
+adding edge
+optimize...
+iteration= 0     chi2= 904352.547030     time= 1.22305   cumTime= 1.22305        edges= 287451   schur= 1        lambda= 471172.798963   levenbergIter= 1
+iteration= 1     chi2= 585510.340346     time= 1.05053   cumTime= 2.27358        edges= 287451   schur= 1        lambda= 157057.599654   levenbergIter= 1
+iteration= 2     chi2= 423706.121521     time= 1.06804   cumTime= 3.34162        edges= 287451   schur= 1        lambda= 52352.533218    levenbergIter= 1
+iteration= 3     chi2= 331464.500731     time= 1.04178   cumTime= 4.3834         edges= 287451   schur= 1        lambda= 17450.844406    levenbergIter= 1
+iteration= 4     chi2= 277106.959839     time= 1.06436   cumTime= 5.44776        edges= 287451   schur= 1        lambda= 5816.948135     levenbergIter= 1
+iteration= 5     chi2= 242366.297255     time= 1.08016   cumTime= 6.52793        edges= 287451   schur= 1        lambda= 1938.982712     levenbergIter= 1
+iteration= 6     chi2= 220567.023525     time= 1.04326   cumTime= 7.57119        edges= 287451   schur= 1        lambda= 646.327571      levenbergIter= 1
+iteration= 7     chi2= 208587.058342     time= 1.08841   cumTime= 8.6596         edges= 287451   schur= 1        lambda= 215.442524      levenbergIter= 1
+iteration= 8     chi2= 203154.135010     time= 1.12042   cumTime= 9.78002        edges= 287451   schur= 1        lambda= 71.814175       levenbergIter= 1
+iteration= 9     chi2= 200364.239867     time= 1.07832   cumTime= 10.8583        edges= 287451   schur= 1        lambda= 23.938058       levenbergIter= 1
+optimization costs time: 11.4331 seconds.
+solve pnp by g2o cost time: 11.9245 seconds.
+```
+
+
+
 ## 直接法的 Bundle Adjustment
 ### 数学模型
 
@@ -767,6 +800,16 @@ void Draw(const VecSE3d &poses, const VecVec3d &points) {
 2. `g2o::VertexSBAPointXYZ`改为`g2o::VertexPointXYZ`
 
 3. 加入`vertex_point->setMarginalized(true);`可大大缩减求解$H\Delta x = b$耗时。
+
+运行log：
+
+```
+poses: 7, points: 4118
+adding vertex
+optimize...
+iteration= 0     chi2= 16572988.639765   time= 0.494989  cumTime= 0.494989       edges= 28826    schur= 1        lambda= 324142744244.137695     levenbergIter= 10
+optimization costs time: 0.539408 seconds.
+```
 
 结果：
 
