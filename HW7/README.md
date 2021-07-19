@@ -369,6 +369,16 @@ void bundleAdjustmentG2O(
 
 ```
 
+在下`cmake ..`时碰到了以下错误：
+```
+Could not find a package configuration file provided by "G2O" with any of
+the following names:
+
+  G2OConfig.cmake
+  g2o-config.cmake
+```
+参考[Build error of g2o](https://github.com/rubengooj/pl-slam/issues/1)，在编译g2o的路径找到`cmake_modules/FindG2O.cmake`，然后将它复制到`/usr/share/cmake-3.16/Modules`路径下即可解决。
+
 需要注意的地方有：
 
 1. 相机的参数有9个，使用`camera`数据结构来储存。图优化的顶点`VertexCamera`的底层数据结构即`camera`。
