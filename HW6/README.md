@@ -764,8 +764,9 @@ cout << "abs disparity error < 10 ratio: " << (double)count_if(disparity_diffs.b
 结果：
 
 ```
-
+disparity gt in: [1, 120]
+disparity pred in: [0, 245]
+disparity error in: [-96, 224]
+disparity error avg: -12.2663
+abs disparity error < 10 ratio: 0.597826
 ```
-
-
-
