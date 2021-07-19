@@ -813,7 +813,7 @@ void Draw(const VecSE3d &poses, const VecVec3d &points) {
    }
    ```
 
-2. 参考[OptimizerG2O compile time errors](https://github.com/introlab/rtabmap/issues/674)，将`g2o::VertexSBAPointXYZ`改为`g2o::VertexPointXYZ`，否则会出现`error: ‘VertexSBAPointXYZ’ is not a member of ‘g2o’; did you mean ‘VertexPointXYZ’?`的错误。
+2. 参考[OptimizerG2O compile time errors](https://github.com/introlab/rtabmap/issues/674)及[split types_six_dof_expmap into multiple files ](https://github.com/RainerKuemmerle/g2o/commit/0fcccb302787e70ff19f65e70fb103a1295b33a2)，将`g2o::VertexSBAPointXYZ`改为`g2o::VertexPointXYZ`，否则会出现`error: ‘VertexSBAPointXYZ’ is not a member of ‘g2o’; did you mean ‘VertexPointXYZ’?`的错误。
 
 3. 加入`vertex_point->setMarginalized(true);`可大大缩减求解$H\Delta x = b$耗时。
 
