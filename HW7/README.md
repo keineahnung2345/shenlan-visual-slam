@@ -420,7 +420,7 @@ BA优化前的点云：
 
 BA优化后的点云：
 
-![pointcloud](pointcloud.PNG)
+![pointcloud_BA](pointcloud_BA.PNG)
 
 ## 直接法的 Bundle Adjustment
 ### 数学模型
