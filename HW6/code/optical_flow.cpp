@@ -1,5 +1,6 @@
 #include <opencv2/opencv.hpp>
 #include <string>
+#include <numeric>
 #include <Eigen/Core>
 #include <Eigen/Dense>
 
@@ -8,8 +9,9 @@ using namespace cv;
 
 // this program shows how to use optical flow
 
-string file_1 = "./1.png";  // first image
-string file_2 = "./2.png";  // second image
+string file_1 = "./left.png";  // first image
+string file_2 = "./right.png";  // second image
+string file_disparity = "./disparity.png";
 
 // TODO implement this funciton
 /**
@@ -49,6 +51,10 @@ void OpticalFlowMultiLevel(
         vector<bool> &success,
         bool inverse = false
 );
+
+void computeDisparity(const vector<KeyPoint> &kp1, 
+                      const vector<KeyPoint> &kp2, 
+                      Mat &img_disparity);
 
 /**
  * get a gray scale value from reference image (bi-linear interpolated)
@@ -101,6 +107,32 @@ int main(int argc, char **argv) {
     vector<float> error;
     cv::calcOpticalFlowPyrLK(img1, img2, pt1, pt2, status, error, cv::Size(8, 8));
 
+    Mat img_disparity_gt = imread(file_disparity, 0);
+    double min, max;
+    cv::minMaxLoc(img_disparity_gt, &min, &max);
+    cout << "disparity gt in: [" << min << ", " << max << "]" << endl;
+
+    Mat img_disparity(cv::Size(img_disparity_gt.cols, img_disparity_gt.rows), CV_8UC1, Scalar(127)); 
+    computeDisparity(kp1, kp2_multi, img_disparity);
+    cv::minMaxLoc(img_disparity, &min, &max);
+    cout << "disparity pred in: [" << min << ", " << max << "]" << endl;
+
+    vector<int> disparity_diffs;
+    int cnt = 0;
+    for(size_t y = 0; y < img_disparity.rows; ++y){
+        for(size_t x = 0; x < img_disparity.cols; ++x){
+            if(img_disparity.at<uchar>(y, x) == 127) continue;
+            disparity_diffs.push_back(static_cast<int>(img_disparity.at<uchar>(y, x) - 
+                img_disparity_gt.at<uchar>(y, x)));
+        }
+    }
+    const auto min_max_it = minmax_element(disparity_diffs.begin(), disparity_diffs.end());
+    cout << "disparity error in: [" << *(min_max_it.first) << ", " << *(min_max_it.second) << "]" << endl;
+    cout << "disparity error avg: " << 
+        (double)std::accumulate(disparity_diffs.begin(), disparity_diffs.end(), 0)/disparity_diffs.size() << endl;
+    cout << "abs disparity error < 10 ratio: " << (double)count_if(disparity_diffs.begin(), disparity_diffs.end(), 
+        [](const int& e){return abs(e) < 10;})/disparity_diffs.size() << endl;
+
     // plot the differences of those functions
     Mat img2_single;
     cv::cvtColor(img2, img2_single, cv::COLOR_GRAY2BGR);
@@ -132,6 +164,7 @@ int main(int argc, char **argv) {
     // cv::imwrite("tracked_single_level.png", img2_single);
     // cv::imwrite("tracked_multi_level.png", img2_multi);
     // cv::imwrite("tracked_by_opencv.png", img2_CV);
+    // cv::imwrite("multi_level_disparity.png", img_disparity);
     cv::imshow("tracked single level", img2_single);
     cv::imshow("tracked multi level", img2_multi);
     cv::imshow("tracked by opencv", img2_CV);
@@ -344,4 +377,15 @@ void OpticalFlowMultiLevel(
 
     // TODO END YOUR CODE HERE
     // don't forget to set the results into kp2
+}
+
+void computeDisparity(const vector<KeyPoint> &kp1, 
+                      const vector<KeyPoint> &kp2, 
+                      Mat &img_disparity){
+    assert(kp1.size() == kp2.size());
+
+    for(size_t i = 0; i < kp1.size(); ++i){
+        // cout << "shift " << kp1[i].pt.x - kp2[i].pt.x << endl;
+        img_disparity.at<uchar>(kp1[i].pt.y, kp1[i].pt.x) = abs(kp1[i].pt.x - kp2[i].pt.x);
+    }
 }
