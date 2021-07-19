@@ -414,7 +414,13 @@ optimization costs time: 11.4331 seconds.
 solve pnp by g2o cost time: 11.9245 seconds.
 ```
 
+BA优化前的点云：
 
+![pointcloud](pointcloud.PNG)
+
+BA优化后的点云：
+
+![pointcloud](pointcloud.PNG)
 
 ## 直接法的 Bundle Adjustment
 ### 数学模型
