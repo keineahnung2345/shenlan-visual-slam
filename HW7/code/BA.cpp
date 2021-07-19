@@ -78,7 +78,7 @@ void bundleAdjustmentG2O(
     const vector<camera> &cams,
     const vector<Eigen::Vector3d> &points,
     const vector<observation> &obvs,
-    vector<Sophus::SE3d> &poses,
+    vector<camera> &poses,
     vector<Eigen::Vector3d> &positions
 );
 
@@ -150,13 +150,26 @@ int main(int argc, char **argv) {
     cout << "obvs: " << obvs.size() << endl;
 
     cout << "calling bundle adjustment by g2o" << endl;
-    vector<Sophus::SE3d> poses_g2o;
+    vector<camera> poses_g2o;
     vector<Eigen::Vector3d> positions_g2o;
     chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
     bundleAdjustmentG2O(cams, points, obvs, poses_g2o, positions_g2o);
     chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
     chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
     cout << "solve pnp by g2o cost time: " << time_used.count() << " seconds." << endl;
+
+    ofstream pcfile;
+    pcfile.open ("pointcloud.txt");
+    for(size_t i = 0; i < points.size(); ++i){
+        pcfile << points[i](0) << ", " << points[i](1) << ", " << points[i](2) << endl;
+    }
+    pcfile.close();
+    pcfile.open ("pointcloud_BA.txt");
+    for(size_t i = 0; i < positions_g2o.size(); ++i){
+        pcfile << positions_g2o[i](0) << ", " << positions_g2o[i](1) << ", " << positions_g2o[i](2) << endl;
+    }
+    pcfile.close();
+
     return 0;
 }
 
@@ -247,7 +260,7 @@ void bundleAdjustmentG2O(
     const vector<camera> &cams,
     const vector<Eigen::Vector3d> &points,
     const vector<observation> &obvs,
-    vector<Sophus::SE3d> &poses,
+    vector<camera> &poses,
     vector<Eigen::Vector3d> &positions) {
 
     cout << "cams: " << cams.size() << endl;
@@ -330,7 +343,10 @@ void bundleAdjustmentG2O(
     chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
     chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
     cout << "optimization costs time: " << time_used.count() << " seconds." << endl;
-    // for(VertexCamera* vertex_camera : vertex_cameras){
-    //     cout << "pose estimated by g2o =\n" << vertex_camera->estimate().matrix() << endl;
-    // }
+    for(VertexCamera* vertex_camera : vertex_cameras){
+        poses.push_back(vertex_camera->estimate());
+    }
+    for(VertexLandmark* vertex_landmark : vertex_landmarks){
+        positions.push_back(vertex_landmark->estimate());
+    }
 }
