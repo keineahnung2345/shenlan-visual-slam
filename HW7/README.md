@@ -368,6 +368,7 @@ void bundleAdjustmentG2O(
 }
 
 ```
+本作业参考了老师的博客：[深入理解图优化与g2o：g2o篇](https://www.cnblogs.com/gaoxiang12/p/5304272.html)。
 
 在下`cmake ..`时碰到了以下错误：
 ```
