@@ -714,3 +714,58 @@ void DirectPoseEstimationMultiLayer(
 
 ## 使用光流计算视差（选做）
 
+请你使用上题金字塔 LK 光流的结果，计算 left.png 中的 GFTT 点在 right.png 中的（水平）视差，然后与 disparity.png进行比较。这样的结果是一个稀疏角点组成的点云。请计算每个角点的水平视差，然后对比视差图比较结果。
+
+新增由两帧图像的关键点计算水平视差的函数：
+
+```cpp
+void computeDisparity(const vector<KeyPoint> &kp1, 
+                      const vector<KeyPoint> &kp2, 
+                      Mat &img_disparity){
+    assert(kp1.size() == kp2.size());
+
+    for(size_t i = 0; i < kp1.size(); ++i){
+        // cout << "shift " << kp1[i].pt.x - kp2[i].pt.x << endl;
+        img_disparity.at<uchar>(kp1[i].pt.y, kp1[i].pt.x) = abs(kp1[i].pt.x - kp2[i].pt.x);
+    }
+}
+```
+
+实际调用`computeDisparity`函数：
+
+```cpp
+Mat img_disparity_gt = imread(file_disparity, 0);
+double min, max;
+cv::minMaxLoc(img_disparity_gt, &min, &max);
+cout << "disparity gt in: [" << min << ", " << max << "]" << endl;
+
+Mat img_disparity(cv::Size(img_disparity_gt.cols, img_disparity_gt.rows), CV_8UC1, Scalar(127)); 
+computeDisparity(kp1, kp2_multi, img_disparity);
+cv::minMaxLoc(img_disparity, &min, &max);
+cout << "disparity pred in: [" << min << ", " << max << "]" << endl;
+
+vector<int> disparity_diffs;
+int cnt = 0;
+for(size_t y = 0; y < img_disparity.rows; ++y){
+    for(size_t x = 0; x < img_disparity.cols; ++x){
+        if(img_disparity.at<uchar>(y, x) == 127) continue;
+        disparity_diffs.push_back(static_cast<int>(img_disparity.at<uchar>(y, x) - 
+            img_disparity_gt.at<uchar>(y, x)));
+    }
+}
+const auto min_max_it = minmax_element(disparity_diffs.begin(), disparity_diffs.end());
+cout << "disparity error in: [" << *(min_max_it.first) << ", " << *(min_max_it.second) << "]" << endl;
+cout << "disparity error avg: " << 
+    (double)std::accumulate(disparity_diffs.begin(), disparity_diffs.end(), 0)/disparity_diffs.size() << endl;
+cout << "abs disparity error < 10 ratio: " << (double)count_if(disparity_diffs.begin(), disparity_diffs.end(), 
+    [](const int& e){return abs(e) < 10;})/disparity_diffs.size() << endl;
+```
+
+结果：
+
+```
+
+```
+
+
+
