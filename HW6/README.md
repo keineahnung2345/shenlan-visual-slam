@@ -761,7 +761,17 @@ cout << "abs disparity error < 10 ratio: " << (double)count_if(disparity_diffs.b
     [](const int& e){return abs(e) < 10;})/disparity_diffs.size() << endl;
 ```
 
-结果：
+使用单层光流的运行结果：
+
+```
+disparity gt in: [1, 120]
+disparity pred in: [0, 127]
+disparity error in: [-96, 43]
+disparity error avg: -23.2582
+abs disparity error < 10 ratio: 0.1875
+```
+
+使用多层光流的运行结果：
 
 ```
 disparity gt in: [1, 120]
@@ -770,3 +780,5 @@ disparity error in: [-96, 224]
 disparity error avg: -12.2663
 abs disparity error < 10 ratio: 0.597826
 ```
+
+从误差小于10的比例来看，多层光流相比于单层光流，效果有显著地提升。
