@@ -412,3 +412,121 @@ T_esti.setRotationMatrix(Sophus::SE3d::exp(dx.tail(3)).rotationMatrix() * T_esti
    令之前的估计为`T_esti`，它是一个4 * 4的变换矩阵，包含一个平移向量和一个旋转矩阵。平移向量的更新：把`dx`的前三个元素加到之前估计的平移向量上；旋转矩阵的更新：对`dx`里的$so(3)$使用指数映射转成旋转矩阵后，左乘到之前的旋转矩阵上。
 
 ## 用 ICP 实现轨迹对齐
+
+使用SVD分解来对齐两个三维点云的函数：
+
+```cpp
+void pose_estimation_3d3d(const VecVector3f &pts1,
+                          const VecVector3f &pts2,
+                          Eigen::Matrix3f &R, Eigen::Vector3f &t) {
+  Eigen::Vector3f p1 = Eigen::Vector3f::Zero(), p2 = Eigen::Vector3f::Zero();     // center of mass
+  int N = pts1.size();
+  for (int i = 0; i < N; i++) {
+    p1 += pts1[i];
+    p2 += pts2[i];
+  }
+  p1 /= N;
+  p2 /= N;
+  cout << "cloud 1 centroid: " << p1.transpose() << endl;
+  cout << "cloud 2 centroid: " << p2.transpose() << endl;
+
+  VecVector3f q1(N), q2(N); // remove the center
+  for (int i = 0; i < N; i++) {
+    q1[i] = pts1[i] - p1;
+    q2[i] = pts2[i] - p2;
+  }
+
+  // compute q1*q2^T
+  // W = sigma (q1i * q2i^T)
+  Eigen::Matrix3f W = Eigen::Matrix3f::Zero();
+  for (int i = 0; i < N; i++) {
+    W += q1[i] * q2[i].transpose();
+  }
+  cout << "W=" << W << endl;
+
+  // SVD on W
+  Eigen::JacobiSVD<Eigen::Matrix3f> svd(W, Eigen::ComputeFullU | Eigen::ComputeFullV);
+  Eigen::Matrix3f U = svd.matrixU();
+  Eigen::Matrix3f V = svd.matrixV();
+
+  cout << "U=" << U << endl;
+  cout << "V=" << V << endl;
+
+  // 用SVD求解R = U * V^T
+  R = U * (V.transpose());
+  // 如果R_的判別式小於0,則把它乘上-1,使它變為一個旋轉矩陣.
+  // 還可以這樣?
+  if (R.determinant() < 0) {
+    R = -R;
+  }
+  /**
+   * p1: target
+   * p2: source
+   * 取t = p1 - Rp2
+   **/
+  t = p1 - R * p2;
+
+}
+```
+
+读取`compare.txt`并实际调用该函数：
+
+```cpp
+int main(int argc, char **argv) {
+
+    vector<Sophus::SE3f, Eigen::aligned_allocator<Sophus::SE3f>> traj_est;
+    vector<Sophus::SE3f, Eigen::aligned_allocator<Sophus::SE3f>> traj_gt;
+
+    // load points in to p3d and p2d 
+    // START YOUR CODE HERE
+    std::ifstream infile(traj_file);
+    // quaternion order: (s, v) or (v, s)
+    double te, xe, ye, ze, qxe, qye, qze, qse;
+    double tg, xg, yg, zg, qxg, qyg, qzg, qsg;
+    while (infile >> te >> xe >> ye >> ze >> qxe >> qye >> qze >> qse
+                  >> tg >> xg >> yg >> zg >> qxg >> qyg >> qzg >> qsg){
+        traj_est.push_back(Sophus::SE3f(Eigen::Quaternionf(qse, qxe, qye, qze), Eigen::Vector3f(xe, ye, ze)));
+        traj_gt.push_back(Sophus::SE3f(Eigen::Quaternionf(qsg, qxg, qyg, qze), Eigen::Vector3f(xg, yg, zg)));
+    }
+
+    // END YOUR CODE HERE
+    assert(traj_est.size() == traj_gt.size());
+    // cout << "There are " << traj_gt.size() << " points." << endl;
+
+    DrawTwoTrajectories(traj_gt, traj_est);
+
+    VecVector3f pts1, pts2;
+    for(size_t i = 0; i < traj_gt.size(); ++i){
+        Eigen::Vector3f traj_gt_pt = traj_gt[i].translation();
+        Eigen::Vector3f traj_est_pt = traj_est[i].translation();
+        pts1.push_back(traj_gt_pt);
+        pts2.push_back(traj_est_pt);
+    }
+    Eigen::Matrix3f R;
+    Eigen::Vector3f t;
+    pose_estimation_3d3d(pts1, pts2, R, t);
+    cout << "ICP via SVD results: " << endl;
+    // p1 = R*p2+t
+    cout << "R = " << R << endl;
+    cout << "t = " << t << endl;
+    // p2 = R^(-1) * (p1-t) = R^(-1) * p1 - R^(-1) * t
+    cout << "R_inv = " << R.transpose() << endl;
+    cout << "t_inv = " << -R.transpose() * t << endl;
+
+    Sophus::SE3f T = Sophus::SE3f(Sophus::Matrix3f(R), Sophus::Vector3f(t));
+    vector<Sophus::SE3f, Eigen::aligned_allocator<Sophus::SE3f>> traj_est_aligned;
+    for(Sophus::SE3f& pt : traj_est){
+        traj_est_aligned.push_back((T * pt));
+    }
+    DrawTwoTrajectories(traj_gt, traj_est_aligned, 0);
+
+    return 0;
+}
+```
+
+运行结果如下：
+
+```
+
+```
+
