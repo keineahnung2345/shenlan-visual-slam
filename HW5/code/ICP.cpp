@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
     assert(traj_est.size() == traj_gt.size());
     // cout << "There are " << traj_gt.size() << " points." << endl;
 
-    // DrawTwoTrajectories(traj_gt, traj_est);
+    DrawTwoTrajectories(traj_gt, traj_est);
 
     write_pointcloud_file("traj_gt.txt", traj_gt);
     write_pointcloud_file("traj_est.txt", traj_est);
@@ -83,10 +83,10 @@ int main(int argc, char **argv) {
     cout << "ICP via SVD results: " << endl;
     // p1 = R*p2+t
     cout << "R = " << R << endl;
-    cout << "t = " << t << endl;
+    cout << "t = " << t.transpose() << endl;
     // p2 = R^(-1) * (p1-t) = R^(-1) * p1 - R^(-1) * t
     cout << "R_inv = " << R.transpose() << endl;
-    cout << "t_inv = " << -R.transpose() * t << endl;
+    cout << "t_inv = " << (-R.transpose() * t).transpose() << endl;
 
     Sophus::SE3f T = Sophus::SE3f(Sophus::Matrix3f(R), Sophus::Vector3f(t));
     vector<Sophus::SE3f, Eigen::aligned_allocator<Sophus::SE3f>> traj_est_aligned;

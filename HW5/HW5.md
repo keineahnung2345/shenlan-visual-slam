@@ -508,10 +508,10 @@ int main(int argc, char **argv) {
     cout << "ICP via SVD results: " << endl;
     // p1 = R*p2+t
     cout << "R = " << R << endl;
-    cout << "t = " << t << endl;
+    cout << "t = " << t.transpose() << endl;
     // p2 = R^(-1) * (p1-t) = R^(-1) * p1 - R^(-1) * t
     cout << "R_inv = " << R.transpose() << endl;
-    cout << "t_inv = " << -R.transpose() * t << endl;
+    cout << "t_inv = " << (-R.transpose() * t).transpose() << endl;
 
     Sophus::SE3f T = Sophus::SE3f(Sophus::Matrix3f(R), Sophus::Vector3f(t));
     vector<Sophus::SE3f, Eigen::aligned_allocator<Sophus::SE3f>> traj_est_aligned;
@@ -524,9 +524,35 @@ int main(int argc, char **argv) {
 }
 ```
 
+输出如下：
+
+```
+cloud 1 centroid:  0.500963 0.0945366   1.45892
+cloud 2 centroid:  -1.26923  0.330327 -0.246748
+W= 476.886  31.8491 -128.091     
+ 88.5151 -39.3438  34.6775                   
+-3.32442 -8.22009 -1.70678                                                                           
+U=   0.988585    -0.15011   -0.012898            
+   0.150525    0.987718   0.0419041                                                                  
+-0.00644937   0.0433672   -0.999038                                                                  
+V= 0.968776  0.221249  0.111903
+0.0511905 -0.620096  0.782854                                                                        
+-0.242596  0.752682   0.61206                                                                        
+ICP via SVD results:                                                                                 
+R =  0.923063  0.133592 -0.360707
+ 0.369046  -0.57197  0.732568                
+-0.108448 -0.809323 -0.577265
+t =   1.5394 0.932636  1.44618
+R_inv =  0.923063  0.369046 -0.108448                                                                
+ 0.133592  -0.57197 -0.809323                                                                        
+-0.360707  0.732568 -0.577265
+t_inv = -1.60832  1.49822 0.706884
+```
+
 运行结果如下：
 
-```
-
-```
+<p float="left">
+  <img src="aligned_trajectories.png" width="380" />
+  <img src="trajectories.png" width="380" />
+</p>
 
