@@ -27,9 +27,9 @@ Undistort:
 Disparity:
 
  <p float="left">
-   <img src="HW4/disparity/left.png" width="300" />
-   <img src="HW4/disparity/right.png" width="300" /> 
-   <img src="HW4/disparity_result.png" width="300" /> 
+   <img src="HW4/disparity/left.png" width="450" />
+   <img src="HW4/disparity/right.png" width="450" /> 
+   <img src="HW4/disparity_result.png" width="450" /> 
  </p>
 
 ## HW5
@@ -44,3 +44,15 @@ Optical flow
 
 Direct method
 ![direct_method](HW6/code/result/direct_method/multiple_layer/0.png)
+
+## HW7
+BA
+
+ <p float="left">
+   <img src="HW7/pointcloud.PNG" width="400" />
+   <img src="HW7/pointcloud_BA.PNG" width="400" /> 
+ </p>
+
+Direct method BA
+![directBA](HW7/directBA.png)
+
